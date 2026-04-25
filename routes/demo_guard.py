@@ -3,100 +3,87 @@ demo_guard.py  –  Read-only / demo-mode middleware for the digital evidence pl
 
 How it works
 ------------
-1. A single environment variable DEMO_MODE=true activates guard mode.
-2. On every incoming request the before_request hook checks whether the
-   request is a state-changing operation (POST / PUT / PATCH / DELETE or
-   any GET url that is known to trigger a write).
-3. If it is, the request is aborted and the user gets a friendly "demo mode"
-   flash message instead of an error.
-4. A global template variable `demo_mode` is injected so templates can hide
-   or dim action buttons without touching any route logic.
+1.  DEMO_MODE=true in env activates the guard globally.
+2.  When the demo user logs in (auth.py) they get:
+        session['role']    = 'Admin'    → every role_required gate passes
+        session['is_demo'] = True       → this guard uses to block writes
+3.  before_request blocks every POST/PUT/PATCH/DELETE for demo sessions.
+    AJAX/fetch callers get a 403 JSON response.
+    Form submitters get a flash + redirect back.
+4.  context_processor injects demo_mode=True into every template so
+    the layout can show the banner, dim buttons, and patch fetch/XHR.
 """
 
 import os
-from flask import request, flash, redirect, url_for, g
-
-# ---------------------------------------------------------------------------
-# Routes that are GET but still trigger writes (seal, verify, download-log…)
-# Add any extra paths here if needed.
-# ---------------------------------------------------------------------------
-_WRITE_GET_PREFIXES = (
-    "/evidence/",   # seal / unseal / verify / signed-url are POST, but keep as safety net
-)
-
-# Routes that must remain fully functional in demo mode (login, static, APIs
-# that are read-only).
-_ALWAYS_ALLOWED = {
-    "/",            # login page
-    "/logout",
-    "/dashboard",
-    "/cases",
-    "/evidence",
-    "/custody",
-    "/timeline",
-    "/reports",
-    "/alerts",
-    "/users",
-    "/analytics",
-    "/crypto",
-    "/neo4j",
-    "/experiments",
-}
-
-_ALWAYS_ALLOWED_PREFIXES = (
-    "/static/",
-    "/analytics",
-    "/api/evidence/",   # read-only bulk-verify GET + custody graph GET
-    "/api/custody/",
-    "/evidence/api/",
-    "/neo4j",
-)
+from flask import request, flash, redirect, url_for, session, jsonify
 
 DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")
 
-
-def _is_write_request() -> bool:
-    """Return True if this request would modify data."""
-    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
-        return True
-    # GET routes that are still write-adjacent (none in this app currently,
-    # but this future-proofs the guard).
-    return False
+# POST to "/" (login) must always work
+_WRITE_WHITELIST = {"/", "/logout"}
 
 
-def _is_allowed_in_demo() -> bool:
-    """Return True if the request should proceed even in demo mode."""
-    path = request.path
-    if path in _ALWAYS_ALLOWED:
-        return True
-    for prefix in _ALWAYS_ALLOWED_PREFIXES:
-        if path.startswith(prefix):
-            return True
-    return False
+def _this_is_demo_session() -> bool:
+    """True when the current session belongs to the demo user."""
+    return bool(session.get("is_demo", False))
 
 
 def register_demo_guard(app):
-    """Call this once in app.py – after all routes are registered."""
+    """Call once in app.py AFTER all routes are registered."""
 
     @app.before_request
     def block_writes_in_demo():
+        # Guard only active when DEMO_MODE env var is set
         if not DEMO_MODE:
-            return  # guard is off; proceed normally
+            return
 
-        if _is_write_request() and not _is_allowed_in_demo():
-            flash(
-                "🔒 Demo mode – this is a read-only showcase. "
-                "All data-changing actions are disabled. "
-                "Contact us to request the full project.",
-                "warning",
-            )
-            # Redirect back to the referring page, or dashboard as fallback.
-            referrer = request.referrer
-            if referrer:
-                return redirect(referrer)
-            return redirect(url_for("dashboard"))
+        # Only intercept write methods
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            return
+
+        # Login form must keep working
+        if request.path in _WRITE_WHITELIST:
+            return
+
+        # Only block demo-session users (real Admin logins still work)
+        if not _this_is_demo_session():
+            return
+
+        # ── AJAX / fetch callers (return JSON 403) ────────────────────────
+        if (
+            request.is_json
+            or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.path.startswith("/api/")
+            or request.headers.get("Accept", "").startswith("application/json")
+        ):
+            return jsonify({
+                "error": "demo_mode",
+                "message": (
+                    "Read-only demo — write operations are disabled. "
+                    "Email srijanani.s2025@amrita.edu to request the full project."
+                )
+            }), 403
+
+        # ── Regular form POST (flash + redirect) ──────────────────────────
+        flash(
+            "🔒 Read-only demo — write operations are disabled. "
+            "Email srijanani.s2025@amrita.edu to request the full project.",
+            "warning",
+        )
+        referrer = request.referrer
+        if referrer:
+            return redirect(referrer)
+        return redirect(url_for("dashboard"))
 
     @app.context_processor
     def inject_demo_flag():
-        """Makes `demo_mode` available in every Jinja template."""
-        return {"demo_mode": DEMO_MODE}
+        """
+        Injects into every template:
+          demo_mode  – True when DEMO_MODE env is set (controls banner/JS)
+          is_demo    – True when *this session* is the demo user
+        """
+        is_demo_session = _this_is_demo_session() if DEMO_MODE else False
+        return {
+            "demo_mode": DEMO_MODE,
+            "is_demo":   is_demo_session,
+        }
