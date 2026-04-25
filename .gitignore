@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-specific
+keys/
+*.pem
+sim_results/
+dbs/__pycache__/
+cyber/__pycache__/
+routes/__pycache__/
