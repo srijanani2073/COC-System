@@ -1,10 +1,8 @@
 from pymongo import MongoClient
 from datetime import datetime
 import hashlib
+from dbs import mongo_db.py
 
-MONGO_URI = "mongodb+srv://mongo_admin:mongo_admin@chain.eo0luzb.mongodb.net/?appName=chain"
-client = MongoClient(MONGO_URI)
-db = client["evidence_db"]
 evidence_versions_collection = db.evidence_versions
 
 def get_evidence_by_hash(file_hash):
