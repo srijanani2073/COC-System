@@ -8,12 +8,12 @@ import os
 # ---------------------------------------------------------------------------
 # Demo-mode credentials
 # Set DEMO_MODE=true + DEMO_PASSWORD=<something> in your Vercel env vars.
-# The demo user gets a read-only "viewer" role and is auto-logged in with
-# these credentials – no database user record needed.
+# The demo user gets role='Admin' so every page renders with full data,
+# but the demo_guard blocks all actual write operations.
 # ---------------------------------------------------------------------------
 DEMO_MODE     = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")
 DEMO_USERNAME = os.environ.get("DEMO_USERNAME", "demo")
-DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "demo1234")  # change in Vercel!
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "demo1234")
 
 
 def register_auth_routes(app):
@@ -25,13 +25,18 @@ def register_auth_routes(app):
             ip       = request.remote_addr
             ua       = request.headers.get("User-Agent", "")
 
-            # ── Demo login (bypasses DB entirely) ────────────────────────────
+            # ── Demo login ───────────────────────────────────────────────────
+            # Give the demo user role='Admin' so every role_required gate
+            # passes and all pages render with full data.
+            # Writes are still blocked by the demo_guard (which checks
+            # session['is_demo'], not the role name).
             if DEMO_MODE and username == DEMO_USERNAME and password == DEMO_PASSWORD:
-                session['user_id']    = 0
-                session['username']   = DEMO_USERNAME
-                session['full_name']  = "Demo Viewer"
-                session['role']       = "viewer"
+                session['user_id']   = 0
+                session['username']  = DEMO_USERNAME
+                session['full_name'] = "Demo Viewer"
+                session['role']      = "Admin"        # ← full view access
                 session['permissions'] = []
+                session['is_demo']   = True            # ← write-block flag
                 return redirect(url_for('dashboard'))
 
             # ── Normal DB login ──────────────────────────────────────────────
@@ -73,6 +78,7 @@ def register_auth_routes(app):
                 session['full_name']  = full_name
                 session['role']       = role_name
                 session['permissions'] = permissions
+                session['is_demo']    = False
 
                 log_login_attempt(username=username_db, user_id=user_id,
                                   ip_address=ip, user_agent=ua, success=True)
@@ -87,7 +93,6 @@ def register_auth_routes(app):
                 flash('Invalid username or password', 'error')
                 return render_template("login.html", error="Invalid username or password")
 
-        # ── Auto-fill hint on login page in demo mode ────────────────────────
         return render_template("login.html", demo_mode=DEMO_MODE,
                                demo_user=DEMO_USERNAME if DEMO_MODE else None)
 
@@ -100,6 +105,6 @@ def register_auth_routes(app):
                                 description=f"User {session['username']} logged out",
                                 ip_address=request.remote_addr)
             except Exception:
-                pass  # demo user_id=0 won't have a DB record
+                pass
         session.clear()
         return redirect(url_for('login'))
