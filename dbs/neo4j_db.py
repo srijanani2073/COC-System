@@ -1,4 +1,5 @@
 from neo4j import GraphDatabase
+import os
 
 NEO4J_URI = os.environ.get("NEO4J_URI")
 NEO4J_USER = os.environ.get("NEO4J_USER")
