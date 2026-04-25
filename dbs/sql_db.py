@@ -1,11 +1,21 @@
 import psycopg2
 
 def get_connection():
+        host = os.environ.get("PG_HOST")
+        db   = os.environ.get("PG_DB")
+        user = os.environ.get("PG_USER")
+        pwd  = os.environ.get("PG_PASSWORD")
+        port = os.environ.get("PG_PORT", "5432")
+        sslmode="require"
+
+        if not all([host, db, user, pwd]):
+        raise ValueError("Missing PostgreSQL environment variables")
+
     return psycopg2.connect(
-        host="aws-1-ap-south-1.pooler.supabase.com",
-        database="postgres",
-        user="postgres.vjhcppcwtdknkhvbpwly",
-        password="3j9J6UVaGY1YM7Th",
-        port=6543,
+        host=host,
+        database=db,
+        user=user,
+        password=pwd,
+        port=port,
         sslmode="require"
     )
