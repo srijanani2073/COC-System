@@ -1,5 +1,6 @@
 from supabase import create_client
 from storage3.exceptions import StorageApiError
+import os
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
