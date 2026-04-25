@@ -50,8 +50,8 @@ def now_ist():
     return datetime.now(_IST)
 
 MONGO_URI = os.environ.get("MONGO_URI")
-    if not mongo_uri:
-        raise ValueError("MONGO_URI not set in environment variables")
+if not MONGO_URI:
+  raise ValueError("MONGO_URI not set in environment variables")
       
 client    = MongoClient(MONGO_URI)
 db        = client["evidence_db"]
