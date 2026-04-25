@@ -9,7 +9,7 @@ def get_connection():
         sslmode="require"
 
         if not all([host, db, user, pwd]):
-        raise ValueError("Missing PostgreSQL environment variables")
+                raise ValueError("Missing PostgreSQL environment variables")
 
     return psycopg2.connect(
         host=host,
