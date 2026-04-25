@@ -1,7 +1,5 @@
-# COC-System
+# COC-System [🔗 DEMO](https://coc-system.vercel.app/)
 Graph-Based Digital Evidence Chain-of-Custody System With Cryptographic Integrity Verification
-
-[DEMO SITE](https://coc-system.vercel.app/)
 
 A full-stack forensic evidence management platform built for investigative teams. ECMS handles the complete lifecycle of digital and physical evidence — from upload and cryptographic sealing, through every custody transfer, to court-ready reports — while maintaining a tamper-evident audit trail across three independent databases.
 
@@ -180,8 +178,8 @@ The RSA key pair is auto-generated in `keys/` on first run if not present.
 
 ---
 
-
-## The repo ships with a read-only demo mode. All write operations are blocked while the full UI remains visible.
+## The repo ships with a read-only demo mode. All write operations are blocked while the full UI remains visible. 
+## [DEMO SITE](https://coc-system.vercel.app/)
 
 The login page will auto-fill the demo credentials. Visitors can browse everything but cannot modify any data.
 
