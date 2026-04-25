@@ -1,0 +1,610 @@
+{% extends "layout.html" %}
+{% block title %}Multi-Model Query — ECMS{% endblock %}
+{% block page_title %}Multi-Model Query{% endblock %}
+
+{% block extra_styles %}
+.qpage{display:grid;grid-template-columns:280px 1fr;gap:0;min-height:calc(100vh - var(--topbar-h));align-items:start;}
+.qpanel{background:var(--surface);border-right:1px solid var(--border);padding:20px 16px;position:sticky;top:var(--topbar-h);height:calc(100vh - var(--topbar-h));overflow-y:auto;display:flex;flex-direction:column;gap:14px;}
+.qmain{padding:24px 28px;min-height:100%;}
+.db-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:20px;font-size:10px;font-family:var(--ff-m);font-weight:500;letter-spacing:.5px;}
+.pill-sql{background:rgba(44,74,110,.12);color:#2c4a6e;}
+.pill-neo{background:rgba(22,101,52,.12);color:#166534;}
+.pill-mongo{background:rgba(146,64,14,.12);color:#92400e;}
+.pill-multi{background:rgba(139,26,26,.1);color:#8b1a1a;}
+.q-section{font-size:10px;font-family:var(--ff-m);letter-spacing:1.2px;text-transform:uppercase;color:var(--text-3);padding:8px 0 4px;}
+.q-btn{width:100%;text-align:left;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:12.5px;color:var(--text-2);font-family:var(--ff-b);display:flex;align-items:center;justify-content:space-between;gap:8px;transition:var(--tr);margin-bottom:4px;}
+.q-btn:hover{border-color:var(--accent);color:var(--text);background:var(--accent-bg);}
+.q-btn.active{border-color:var(--accent);background:var(--accent-bg);color:var(--accent);font-weight:500;}
+.q-btn .q-db{font-size:9px;font-family:var(--ff-m);opacity:.7;}
+.q-input-panel{background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:18px;}
+.q-title{font-family:var(--ff-d);font-size:18px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.q-desc{font-size:12px;color:var(--text-3);margin-bottom:14px;font-family:var(--ff-m);}
+.q-label{font-size:10px;font-family:var(--ff-m);letter-spacing:.8px;text-transform:uppercase;color:var(--text-3);margin-bottom:5px;}
+.result-section{margin-top:6px;}
+.result-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+.result-title{font-family:var(--ff-d);font-size:15px;font-weight:600;}
+.result-count{font-size:10px;font-family:var(--ff-m);color:var(--text-3);}
+.r-row{display:flex;gap:0;border-bottom:1px solid var(--border);align-items:stretch;}
+.r-row:last-child{border-bottom:none;}
+.r-key{flex:0 0 180px;padding:8px 12px;font-size:11px;font-family:var(--ff-m);color:var(--text-3);background:var(--bg-2);border-right:1px solid var(--border);}
+.r-val{flex:1;padding:8px 12px;font-size:12.5px;color:var(--text);word-break:break-all;}
+.r-val .mono{font-family:var(--ff-m);font-size:11px;color:var(--accent-2);}
+.result-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px;}
+.result-card-head{background:var(--bg-2);padding:8px 14px;font-size:11px;font-family:var(--ff-m);color:var(--text-2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.empty-q{padding:40px;text-align:center;color:var(--text-3);font-family:var(--ff-m);font-size:12px;}
+.multi-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;}
+.multi-stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;}
+.multi-stat-num{font-family:var(--ff-d);font-size:26px;font-weight:600;color:var(--accent);}
+.multi-stat-lbl{font-size:10px;font-family:var(--ff-m);color:var(--text-3);margin-top:2px;}
+.multi-stat-src{font-size:9px;font-family:var(--ff-m);margin-top:6px;opacity:.6;}
+.chain-step{display:flex;gap:12px;align-items:flex-start;padding:10px 0;}
+.chain-step:not(:last-child){border-bottom:1px dashed var(--border);}
+.chain-num{width:26px;height:26px;border-radius:50%;background:var(--accent-bg-2);color:var(--accent-2);font-family:var(--ff-m);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+.chain-body{flex:1;}
+.chain-action{font-size:11px;font-family:var(--ff-m);font-weight:500;text-transform:uppercase;letter-spacing:.5px;color:var(--text);}
+.chain-meta{font-size:11px;color:var(--text-3);margin-top:2px;}
+.anomaly-row{padding:8px 12px;border-radius:6px;margin-bottom:6px;font-size:12px;}
+.anomaly-high{background:rgba(153,27,27,.08);border-left:3px solid var(--red);}
+.anomaly-med{background:rgba(146,64,14,.08);border-left:3px solid var(--amber);}
+.spinner-sm{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.query-run-bar{display:flex;gap:10px;align-items:center;margin-top:10px;}
+.tab-bar{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px;}
+.tab-btn{padding:8px 16px;font-size:12px;font-family:var(--ff-m);color:var(--text-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:var(--tr);}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
+.log-row{padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;flex-direction:column;gap:3px;}
+.log-row:last-child{border-bottom:none;}
+.log-row-head{display:flex;align-items:center;gap:8px;margin-bottom:3px;}
+.log-ts{font-family:var(--ff-m);font-size:10px;color:var(--text-3);white-space:nowrap;flex-shrink:0;}
+.log-ev{font-family:var(--ff-m);font-size:10px;color:var(--accent-2);background:var(--accent-bg-2);border-radius:3px;padding:1px 5px;white-space:nowrap;display:inline-block;width:fit-content;}
+.log-desc{font-size:11px;color:var(--text-2);word-break:break-word;padding-left:1px;}
+{% endblock %}
+
+{% block content %}
+<div class="qpage">
+
+  <!-- LEFT PANEL: query browser -->
+  <div class="qpanel">
+    <div style="font-family:var(--ff-d);font-size:15px;font-weight:600;color:var(--text);">Query Browser</div>
+    <div style="font-size:11px;color:var(--text-3);font-family:var(--ff-m);margin-top:-8px;">Multi-model database queries</div>
+
+    <div class="q-section">SQL — Relational</div>
+    <button class="q-btn active" onclick="selectQuery('evidence_by_case')" id="qbtn-evidence_by_case">
+      <span>Evidence by Case</span><span class="db-pill pill-sql">PostgreSQL</span>
+    </button>
+    <button class="q-btn" onclick="selectQuery('custody_by_evidence')" id="qbtn-custody_by_evidence">
+      <span>Custody Events</span><span class="db-pill pill-sql">PostgreSQL</span>
+    </button>
+    <button class="q-btn" onclick="selectQuery('case_summary')" id="qbtn-case_summary">
+      <span>Case Summary</span><span class="db-pill pill-sql">PostgreSQL</span>
+    </button>
+    <button class="q-btn" onclick="selectQuery('user_history')" id="qbtn-user_history">
+      <span>User History</span><span class="db-pill pill-sql">PostgreSQL</span>
+    </button>
+
+    <div class="q-section">Graph — Neo4j</div>
+    <button class="q-btn" onclick="selectQuery('custody_chain')" id="qbtn-custody_chain">
+      <span>Full Custody Chain</span><span class="db-pill pill-neo">Neo4j</span>
+    </button>
+    <button class="q-btn" onclick="selectQuery('detect_anomalies')" id="qbtn-detect_anomalies">
+      <span>Detect Anomalies</span><span class="db-pill pill-neo">Neo4j</span>
+    </button>
+    <button class="q-btn" onclick="selectQuery('user_network')" id="qbtn-user_network">
+      <span>User Network</span><span class="db-pill pill-neo">Neo4j</span>
+    </button>
+
+    <div class="q-section">Document — MongoDB</div>
+    <button class="q-btn" onclick="selectQuery('activity_logs')" id="qbtn-activity_logs">
+      <span>Activity Logs</span><span class="db-pill pill-mongo">MongoDB</span>
+    </button>
+    <button class="q-btn" onclick="selectQuery('access_patterns')" id="qbtn-access_patterns">
+      <span>Access Patterns</span><span class="db-pill pill-mongo">MongoDB</span>
+    </button>
+
+    <div class="q-section">Combined Analysis</div>
+    <button class="q-btn" onclick="selectQuery('cross_db')" id="qbtn-cross_db">
+      <span>Cross-DB Correlation</span><span class="db-pill pill-multi">All DBs</span>
+    </button>
+    <button class="q-btn" onclick="selectQuery('evidence_full')" id="qbtn-evidence_full">
+      <span>Full Evidence Profile</span><span class="db-pill pill-multi">All DBs</span>
+    </button>
+  </div>
+
+  <!-- RIGHT PANEL: query runner + results -->
+  <div class="qmain">
+
+    <!-- Query input panel (rendered by JS) -->
+    <div id="queryInputPanel"></div>
+
+    <!-- Results -->
+    <div id="queryResults">
+      <div class="empty-q">
+        ← Select a query from the left panel to begin.<br><br>
+        Queries run against PostgreSQL, Neo4j, and MongoDB in real time.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Query definitions ──────────────────────────────────────────────────────
+const QUERIES = {
+  evidence_by_case: {
+    title: 'Evidence by Case',
+    db: 'PostgreSQL',
+    pill: 'pill-sql',
+    desc: 'Returns all active evidence items for a case, joined with uploader and case info.',
+    cypher: `SELECT e.*, u.full_name, c.case_number\nFROM evidence e\nJOIN users u ON e.uploader_id = u.user_id\nJOIN cases c ON e.case_id = c.case_id\nWHERE e.case_id = {case_id} AND e.is_active = TRUE\nORDER BY e.upload_time DESC;`,
+    inputs: [{id:'case_id', label:'Case', type:'case'}],
+    endpoint: '/api/query/evidence',
+    paramKey: 'case_id',
+  },
+  custody_by_evidence: {
+    title: 'Custody Events by Evidence',
+    db: 'PostgreSQL',
+    pill: 'pill-sql',
+    desc: 'All custody transfer events for a specific evidence item, ordered by time.',
+    cypher: `SELECT cl.*, u_from.full_name, u_to.full_name\nFROM coc_logs cl\nLEFT JOIN users u_from ON cl.from_user_id = u_from.user_id\nLEFT JOIN users u_to ON cl.to_user_id = u_to.user_id\nWHERE cl.evidence_id = {evidence_id}\nORDER BY cl.timestamp ASC;`,
+    inputs: [{id:'evidence_id', label:'Evidence ID', type:'number'}],
+    endpoint: '/api/query/custody-events',
+    paramKey: 'evidence_id',
+  },
+  case_summary: {
+    title: 'Case Summary',
+    db: 'PostgreSQL',
+    pill: 'pill-sql',
+    desc: 'Full aggregate summary of a case: evidence counts, custody events, file sizes.',
+    cypher: `SELECT c.*, COUNT(DISTINCT e.evidence_id) as evidence_count,\n  COUNT(DISTINCT cl.log_id) as custody_events,\n  COALESCE(SUM(e.size_bytes),0) as total_bytes\nFROM cases c\nLEFT JOIN evidence e ON c.case_id = e.case_id\nLEFT JOIN coc_logs cl ON e.evidence_id = cl.evidence_id\nWHERE c.case_id = {case_id}\nGROUP BY c.case_id;`,
+    inputs: [{id:'case_id', label:'Case', type:'case'}],
+    endpoint: '/api/query/case-summary',
+    paramKey: 'case_id',
+  },
+  user_history: {
+    title: 'User Custody History',
+    db: 'PostgreSQL',
+    pill: 'pill-sql',
+    desc: 'All custody events where a user was sender or receiver.',
+    cypher: `SELECT cl.*, e.evidence_code, c.case_number\nFROM coc_logs cl\nJOIN evidence e ON cl.evidence_id = e.evidence_id\nJOIN cases c ON e.case_id = c.case_id\nWHERE cl.from_user_id = {user_id} OR cl.to_user_id = {user_id}\nORDER BY cl.timestamp DESC LIMIT 100;`,
+    inputs: [{id:'user_id', label:'User ID', type:'number'}],
+    endpoint: '/api/query/user-custody-history',
+    paramKey: 'user_id',
+  },
+  custody_chain: {
+    title: 'Full Custody Chain',
+    db: 'Neo4j',
+    pill: 'pill-neo',
+    desc: 'Traverses the graph to return the full ordered custody chain for an evidence item.',
+    cypher: `MATCH (e:Evidence {evidence_id: {evidence_id}})\n  -[:HAS_CUSTODY_EVENT]->(ce:CustodyEvent)\nOPTIONAL MATCH (fu:User)-[:FROM]->(ce)\nOPTIONAL MATCH (ce)-[:TO]->(tu:User)\nRETURN ce, fu, tu\nORDER BY ce.timestamp ASC`,
+    inputs: [{id:'evidence_id', label:'Evidence ID', type:'number'}],
+    endpoint: '/api/query/custody-chain',
+    paramKey: 'evidence_id',
+  },
+  detect_anomalies: {
+    title: 'Detect Chain Anomalies',
+    db: 'Neo4j',
+    pill: 'pill-neo',
+    desc: 'Uses graph traversal to detect custody gaps, cycles, and rapid transfers.',
+    cypher: `MATCH (e:Evidence {evidence_id: {evidence_id}})\n  -[:HAS_CUSTODY_EVENT]->(ce:CustodyEvent)\nMATCH (fu:User)-[:FROM]->(ce)\nMATCH (ce)-[:TO]->(tu:User)\nWITH ce, fu, tu ORDER BY ce.timestamp\nRETURN ce, fu.user_id, tu.user_id\n-- gap: tu[n] != fu[n+1]`,
+    inputs: [{id:'evidence_id', label:'Evidence ID', type:'number'}],
+    endpoint: '/api/query/detect-anomalies',
+    paramKey: 'evidence_id',
+  },
+  user_network: {
+    title: 'User Custody Network',
+    db: 'Neo4j',
+    pill: 'pill-neo',
+    desc: 'Returns all custody relationships a user is part of across the graph.',
+    cypher: `MATCH (u:User {user_id: {user_id}})\nOPTIONAL MATCH (u)-[:UPLOADED]->(e:Evidence)\nOPTIONAL MATCH (u)-[:FROM]->(ce:CustodyEvent)\nOPTIONAL MATCH (ce2:CustodyEvent)-[:TO]->(u)\nRETURN u, e, ce, ce2`,
+    inputs: [{id:'user_id', label:'User ID', type:'number'}],
+    endpoint: '/api/query/user-network',
+    paramKey: 'user_id',
+  },
+  activity_logs: {
+    title: 'Activity Logs',
+    db: 'MongoDB',
+    pill: 'pill-mongo',
+    desc: 'Fetches recent case activity logs from MongoDB, optionally filtered by case.',
+    cypher: `db.case_activity_logs.find(\n  { case_id: {case_id} }\n).sort({ timestamp: -1 }).limit(50)`,
+    inputs: [{id:'case_id', label:'Case', type:'case'}],
+    endpoint: '/api/query/activity-logs',
+    paramKey: 'case_id',
+  },
+  access_patterns: {
+    title: 'Access Patterns',
+    db: 'MongoDB',
+    pill: 'pill-mongo',
+    desc: 'Aggregates audit log entries by action type and IP address from MongoDB.',
+    cypher: `db.audit_logs.aggregate([\n  { $group: {\n      _id: { action: "$action", ip: "$ip_address" },\n      count: { $sum: 1 }\n  }},\n  { $sort: { count: -1 }},\n  { $limit: 30 }\n])`,
+    inputs: [],
+    endpoint: '/api/query/access-patterns',
+    paramKey: null,
+  },
+  cross_db: {
+    title: 'Cross-DB Correlation',
+    db: 'All DBs',
+    pill: 'pill-multi',
+    desc: 'Correlates evidence activity across PostgreSQL (counts), Neo4j (chain depth), and MongoDB (log volume).',
+    cypher: `-- SQL\nSELECT evidence_id, COUNT(*) from coc_logs GROUP BY evidence_id\n\n-- Neo4j\nMATCH (e:Evidence)-[:HAS_CUSTODY_EVENT]->(ce) RETURN e.evidence_id, count(ce)\n\n-- MongoDB\ndb.case_activity_logs.aggregate([{ $group: { _id: "$entity_id", n: { $sum:1 } } }])`,
+    inputs: [],
+    endpoint: '/api/analytics/cross-database',
+    paramKey: null,
+  },
+  evidence_full: {
+    title: 'Full Evidence Profile',
+    db: 'All DBs',
+    pill: 'pill-multi',
+    desc: 'Aggregates SQL metadata, Neo4j chain, and MongoDB logs for one evidence item.',
+    cypher: `-- SQL: metadata + custody log\n-- Neo4j: graph traversal + anomalies\n-- MongoDB: activity + audit history`,
+    inputs: [{id:'evidence_id', label:'Evidence ID', type:'number'}],
+    endpoint: '/api/query/evidence-profile',
+    paramKey: 'evidence_id',
+  },
+};
+
+// ── Cases dropdown data ────────────────────────────────────────────────────
+const CASES = {{ cases | tojson }};
+
+let currentQuery = 'evidence_by_case';
+
+function selectQuery(key) {
+  currentQuery = key;
+  document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('qbtn-' + key);
+  if (btn) btn.classList.add('active');
+  renderInputPanel(key);
+  document.getElementById('queryResults').innerHTML = '<div class="empty-q">Fill in the inputs above and click Run Query.</div>';
+}
+
+function renderInputPanel(key) {
+  const q = QUERIES[key];
+  if (!q) return;
+
+  let inputsHtml = '';
+  (q.inputs || []).forEach(inp => {
+    if (inp.type === 'case') {
+      let opts = CASES.map(c =>
+        `<option value="${c.id}">${c.case_number} — ${c.title}</option>`
+      ).join('');
+      inputsHtml += `<div style="margin-bottom:10px;">
+        <div class="q-label">${inp.label}</div>
+        <select id="qinput-${inp.id}" class="form-control">${opts}</select>
+      </div>`;
+    } else {
+      inputsHtml += `<div style="margin-bottom:10px;">
+        <div class="q-label">${inp.label}</div>
+        <input id="qinput-${inp.id}" type="number" class="form-control" placeholder="Enter ${inp.label}">
+      </div>`;
+    }
+  });
+
+  document.getElementById('queryInputPanel').innerHTML = `
+    <div class="q-input-panel">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <div class="q-title">${q.title}</div>
+        <span class="db-pill ${q.pill}">${q.db}</span>
+      </div>
+      <div class="q-desc">${q.desc}</div>
+      <details style="margin-bottom:12px;">
+        <summary style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);cursor:pointer;letter-spacing:.5px;">QUERY / CYPHER</summary>
+        <pre style="margin-top:8px;padding:10px;background:var(--bg-3);border-radius:6px;font-size:10px;font-family:var(--ff-m);color:var(--text-2);overflow-x:auto;white-space:pre;">${escHtml(q.cypher)}</pre>
+      </details>
+      ${inputsHtml}
+      <div class="query-run-bar">
+        <button class="btn btn-primary" onclick="runQuery()" id="runBtn">Run Query</button>
+        <span id="runStatus" style="font-size:11px;font-family:var(--ff-m);color:var(--text-3);"></span>
+      </div>
+    </div>`;
+}
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function runQuery() {
+  const q = QUERIES[currentQuery];
+  if (!q) return;
+  const btn = document.getElementById('runBtn');
+  const status = document.getElementById('runStatus');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-sm"></span> Running…';
+  status.textContent = '';
+
+  // Build params
+  const params = new URLSearchParams();
+  (q.inputs || []).forEach(inp => {
+    const el = document.getElementById('qinput-' + inp.id);
+    if (el && el.value) params.set(inp.paramKey || inp.id, el.value);
+  });
+  // Use paramKey from query def
+  if (q.paramKey && q.inputs.length > 0) {
+    const el = document.getElementById('qinput-' + q.inputs[0].id);
+    if (el && el.value) {
+      params.set(q.paramKey, el.value);
+    }
+  }
+
+  const t0 = performance.now();
+  try {
+    const url = q.endpoint + (params.toString() ? '?' + params.toString() : '');
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(3);
+    status.textContent = `${elapsed}s`;
+    renderResults(currentQuery, data, elapsed);
+  } catch(e) {
+    document.getElementById('queryResults').innerHTML =
+      `<div class="empty-q" style="color:var(--red);">Error: ${e.message}</div>`;
+  }
+  btn.disabled = false;
+  btn.innerHTML = 'Run Query';
+}
+
+// ── Result renderers ───────────────────────────────────────────────────────
+function renderResults(key, data, elapsed) {
+  const out = document.getElementById('queryResults');
+  let html = '';
+
+  const badge = `<span style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);">${elapsed}s · ${QUERIES[key].db}</span>`;
+
+  switch(key) {
+
+    case 'evidence_by_case': {
+      const items = data.evidence || data || [];
+      html = `<div class="result-header"><div class="result-title">Evidence Items</div>${badge}<span class="result-count">${items.length} rows</span></div>`;
+      if (!items.length) { html += `<div class="empty-q">No evidence found.</div>`; break; }
+      items.forEach(ev => {
+        html += `<div class="result-card">
+          <div class="result-card-head">
+            <span class="mono-blue">${ev.evidence_code||ev.code||'—'}</span>
+            <span>${ev.evidence_type||ev.type||'—'}</span>
+          </div>
+          <div class="r-row"><div class="r-key">Tag / Description</div><div class="r-val">${ev.evidence_tag||ev.tag||'—'}</div></div>
+          <div class="r-row"><div class="r-key">Uploader</div><div class="r-val">${ev.uploader||ev.uploader_name||'—'}</div></div>
+          <div class="r-row"><div class="r-key">SHA-256 (partial)</div><div class="r-val"><span class="mono">${ev.hash||'—'}</span></div></div>
+          <div class="r-row"><div class="r-key">Size</div><div class="r-val">${ev.size_bytes ? (ev.size_bytes/1024).toFixed(1)+' KB' : '—'}</div></div>
+          <div class="r-row"><div class="r-key">Version</div><div class="r-val">${ev.version||'—'}</div></div>
+          <div class="r-row"><div class="r-key">Uploaded</div><div class="r-val mono">${ev.uploaded_at||ev.upload_time||'—'}</div></div>
+          <div class="r-row"><div class="r-key">Last Verified</div><div class="r-val mono">${ev.last_verified||ev.last_verified_at||'Never'}</div></div>
+        </div>`;
+      });
+      break;
+    }
+
+    case 'custody_by_evidence': {
+      const items = data.events || data || [];
+      html = `<div class="result-header"><div class="result-title">Custody Events</div>${badge}<span class="result-count">${items.length} events</span></div>`;
+      if (!items.length) { html += `<div class="empty-q">No custody events found.</div>`; break; }
+      items.forEach((ev, i) => {
+        html += `<div class="chain-step">
+          <div class="chain-num">${i+1}</div>
+          <div class="chain-body">
+            <div class="chain-action">${ev.action||'transfer'}</div>
+            <div class="chain-meta">${ev.from_user||'—'} → ${ev.to_user||'—'} · ${ev.location||'—'}</div>
+            <div class="chain-meta" style="margin-top:2px;">${ev.description||ev.reason||''}</div>
+            <div class="chain-meta"><span class="mono">${ev.timestamp||'—'}</span></div>
+          </div>
+        </div>`;
+      });
+      break;
+    }
+
+    case 'case_summary': {
+      const s = data.summary || data;
+      if (!s) { html = `<div class="empty-q">Case not found.</div>`; break; }
+      html = `<div class="result-header"><div class="result-title">${s.title||'Case'}</div>${badge}</div>
+        <div class="multi-col">
+          <div class="multi-stat"><div class="multi-stat-num">${s.evidence_count||0}</div><div class="multi-stat-lbl">Evidence Items</div><div class="multi-stat-src">PostgreSQL</div></div>
+          <div class="multi-stat"><div class="multi-stat-num">${s.total_versions||0}</div><div class="multi-stat-lbl">Total Versions</div><div class="multi-stat-src">PostgreSQL</div></div>
+          <div class="multi-stat"><div class="multi-stat-num">${s.custody_events||0}</div><div class="multi-stat-lbl">Custody Events</div><div class="multi-stat-src">PostgreSQL</div></div>
+        </div>
+        <div class="result-card">
+          <div class="r-row"><div class="r-key">Case Number</div><div class="r-val mono-blue">${s.case_number||'—'}</div></div>
+          <div class="r-row"><div class="r-key">Status</div><div class="r-val">${s.status||'—'}</div></div>
+          <div class="r-row"><div class="r-key">Created By</div><div class="r-val">${s.created_by||'—'}</div></div>
+          <div class="r-row"><div class="r-key">Created At</div><div class="r-val mono">${s.created_at||'—'}</div></div>
+          ${s.description ? `<div class="r-row"><div class="r-key">Description</div><div class="r-val">${s.description}</div></div>` : ''}
+        </div>`;
+      break;
+    }
+
+    case 'user_history': {
+      const items = data.history || data.events || [];
+      html = `<div class="result-header"><div class="result-title">User Custody History</div>${badge}<span class="result-count">${items.length} events</span></div>`;
+      if (!items.length) { html += `<div class="empty-q">No custody events found for this user.</div>`; break; }
+      items.slice(0,50).forEach((ev, i) => {
+        const from = ev.from_user || ev.from_user_name || (ev.from_user_id ? `User ${ev.from_user_id}` : '—');
+        const to   = ev.to_user   || ev.to_user_name   || (ev.to_user_id   ? `User ${ev.to_user_id}`   : '—');
+        html += `<div class="chain-step">
+          <div class="chain-num">${i+1}</div>
+          <div class="chain-body">
+            <div class="chain-action">${ev.action||'transfer'} · <span class="mono-blue">${ev.evidence_code||'—'}</span></div>
+            <div class="chain-meta">${from} → ${to} · Case ${ev.case_number||'—'}</div>
+            <div class="chain-meta"><span class="mono">${ev.timestamp||ev.description||'—'}</span></div>
+          </div>
+        </div>`;
+      });
+      break;
+    }
+
+    case 'custody_chain': {
+      const chain = data.chain || [];
+      html = `<div class="result-header"><div class="result-title">Custody Chain</div>${badge}<span class="result-count">${chain.length} transfers · ${data.source||'neo4j'}</span></div>`;
+      if (!chain.length) { html += `<div class="empty-q">No custody events found for this evidence item.</div>`; break; }
+      chain.forEach((ev, i) => {
+        const from = ev.from_user || (ev.from_user_id ? `User ${ev.from_user_id}` : '—');
+        const to   = ev.to_user   || (ev.to_user_id   ? `User ${ev.to_user_id}`   : '—');
+        html += `<div class="chain-step">
+          <div class="chain-num">${i+1}</div>
+          <div class="chain-body">
+            <div class="chain-action">${ev.action||'transfer'}</div>
+            <div class="chain-meta" style="font-weight:500;">${from} → ${to}</div>
+            <div class="chain-meta">${ev.reason||''}</div>
+            <div class="chain-meta"><span class="mono">${ev.timestamp||'—'}</span></div>
+          </div>
+        </div>`;
+      });
+      break;
+    }
+
+    case 'detect_anomalies': {
+      const anomalies = data.anomalies || [];
+      html = `<div class="result-header"><div class="result-title">Anomaly Detection</div>${badge}<span class="result-count">${anomalies.length} anomalies found</span></div>`;
+      if (!anomalies.length) {
+        html += `<div class="info-box ok" style="margin-top:0;"><span>✓</span><span>No anomalies detected in the custody chain.</span></div>`;
+      } else {
+        anomalies.forEach(a => {
+          const cls = a.severity === 'high' ? 'anomaly-high' : 'anomaly-med';
+          html += `<div class="anomaly-row ${cls}">
+            <div style="font-weight:500;font-size:12px;">${a.type} <span style="font-size:10px;font-family:var(--ff-m);opacity:.7;">[${a.severity}]</span></div>
+            <div style="font-size:11px;color:var(--text-2);margin-top:2px;">${a.description}</div>
+          </div>`;
+        });
+      }
+      break;
+    }
+
+    case 'user_network': {
+      const net = data.network || [];
+      html = `<div class="result-header"><div class="result-title">User Custody Network</div>${badge}</div>`;
+      if (!net.length) { html += `<div class="empty-q">No custody events found for this user.</div>`; break; }
+      net.forEach(r => {
+        const partners = (r.partners||[]).filter(Boolean).slice(0,8).join(', ') || '—';
+        const eids = (r.evidence_ids||[]).slice(0,10).join(', ') || '—';
+        html += `<div class="result-card">
+          <div class="result-card-head"><span>${r.relationship_type||'—'}</span><span class="mono">${r.event_count} event${r.event_count!==1?'s':''}</span></div>
+          <div class="r-row"><div class="r-key">Partners</div><div class="r-val">${partners}</div></div>
+          <div class="r-row"><div class="r-key">Evidence IDs</div><div class="r-val mono">${eids}</div></div>
+        </div>`;
+      });
+      break;
+    }
+
+    case 'activity_logs': {
+      const items = data.logs || data || [];
+      html = `<div class="result-header"><div class="result-title">Activity Logs</div>${badge}<span class="result-count">${items.length} entries</span></div>`;
+      if (!items.length) { html += `<div class="empty-q">No activity logs found.</div>`; break; }
+      html += `<div class="result-card"><div style="padding:4px 0;">`;
+      items.forEach(log => {
+        html += `<div class="log-row">
+          <span class="log-ts">${log.timestamp ? new Date(log.timestamp).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}) : '—'}</span>
+          <span class="log-ev">${log.event_type||log.action||'—'}</span>
+          <span class="log-desc">${log.description||''}</span>
+        </div>`;
+      });
+      html += `</div></div>`;
+      break;
+    }
+
+    case 'access_patterns': {
+      const items = data.patterns || data.top_ip_addresses || data || [];
+      html = `<div class="result-header"><div class="result-title">Access Patterns</div>${badge}</div>`;
+      const byAction = data.by_action || [];
+      const byIp = data.top_ip_addresses || [];
+      if (byAction.length) {
+        html += `<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin-bottom:8px;">BY ACTION TYPE</div>`;
+        html += `<div class="result-card">`;
+        byAction.slice(0,10).forEach(r => {
+          html += `<div class="r-row"><div class="r-key">${r.action||r._id||'—'}</div><div class="r-val mono-blue">${r.count} events</div></div>`;
+        });
+        html += `</div>`;
+      }
+      if (byIp.length) {
+        html += `<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin:14px 0 8px;">TOP IP ADDRESSES</div>`;
+        html += `<div class="result-card">`;
+        byIp.slice(0,10).forEach(r => {
+          html += `<div class="r-row"><div class="r-key mono">${r.ip||'—'}</div><div class="r-val">${r.access_count} requests</div></div>`;
+        });
+        html += `</div>`;
+      }
+      if (!byAction.length && !byIp.length) html += `<div class="empty-q">No access data available.</div>`;
+      break;
+    }
+
+    case 'cross_db': {
+      const mv = data.most_versioned_evidence || [];
+      const ma = data.most_active_evidence || [];
+      const lc = data.longest_custody_chains || [];
+      html = `<div class="result-header"><div class="result-title">Cross-Database Correlation</div>${badge}</div>
+        <div class="multi-col">
+          <div class="multi-stat"><div class="multi-stat-num">${mv.length}</div><div class="multi-stat-lbl">Multi-version Evidence</div><div class="multi-stat-src">PostgreSQL</div></div>
+          <div class="multi-stat"><div class="multi-stat-num">${ma.length}</div><div class="multi-stat-lbl">Active in MongoDB</div><div class="multi-stat-src">MongoDB</div></div>
+          <div class="multi-stat"><div class="multi-stat-num">${lc.length}</div><div class="multi-stat-lbl">Long Chain Items</div><div class="multi-stat-src">Neo4j</div></div>
+        </div>`;
+      if (mv.length) {
+        html += `<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin-bottom:8px;">MOST VERSIONED (PostgreSQL)</div><div class="result-card">`;
+        mv.slice(0,5).forEach(r => { html += `<div class="r-row"><div class="r-key">${r.filename}</div><div class="r-val mono-blue">${r.versions} versions · Case ${r.case_id}</div></div>`; });
+        html += `</div>`;
+      }
+      if (ma.length) {
+        html += `<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin:14px 0 8px;">MOST ACTIVE (MongoDB)</div><div class="result-card">`;
+        ma.slice(0,5).forEach(r => { html += `<div class="r-row"><div class="r-key">Evidence #${r.evidence_id}</div><div class="r-val mono-blue">${r.activity_count} log entries</div></div>`; });
+        html += `</div>`;
+      }
+      if (lc.length) {
+        html += `<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin:14px 0 8px;">LONGEST CHAINS (Neo4j)</div><div class="result-card">`;
+        lc.slice(0,5).forEach(r => { html += `<div class="r-row"><div class="r-key">Evidence #${r.evidence_id}</div><div class="r-val mono-blue">${r.chain_length} transfers</div></div>`; });
+        html += `</div>`;
+      }
+      break;
+    }
+
+    case 'evidence_full': {
+      const sql  = data.sql  || {};
+      const neo  = data.neo  || {};
+      const mongo= data.mongo|| {};
+      html = `<div class="result-header"><div class="result-title">Full Evidence Profile</div>${badge}</div>`;
+
+      // SQL
+      html += `<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin-bottom:8px;">POSTGRESQL — METADATA</div><div class="result-card">`;
+      if (sql.evidence_code) {
+        html += `<div class="r-row"><div class="r-key">Evidence Code</div><div class="r-val mono-blue">${sql.evidence_code}</div></div>`;
+        html += `<div class="r-row"><div class="r-key">Type</div><div class="r-val">${sql.evidence_type}</div></div>`;
+        html += `<div class="r-row"><div class="r-key">Hash (SHA-256)</div><div class="r-val mono" style="font-size:10px;">${sql.file_hash||'—'}</div></div>`;
+        html += `<div class="r-row"><div class="r-key">Uploader</div><div class="r-val">${sql.uploader}</div></div>`;
+        html += `<div class="r-row"><div class="r-key">Case</div><div class="r-val">${sql.case_number} — ${sql.case_title}</div></div>`;
+        html += `<div class="r-row"><div class="r-key">Sealed</div><div class="r-val">${sql.is_sealed?'Yes — '+sql.seal_reason:'No'}</div></div>`;
+        html += `<div class="r-row"><div class="r-key">Custody Events (SQL)</div><div class="r-val mono-blue">${sql.custody_count}</div></div>`;
+      } else {
+        html += `<div style="padding:12px;color:var(--text-3);font-size:12px;">Evidence not found.</div>`;
+      }
+      html += `</div>`;
+
+      // Neo4j
+      html += `<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin:14px 0 8px;">NEO4J — GRAPH CHAIN</div><div class="result-card">`;
+      html += `<div class="r-row"><div class="r-key">Chain Length</div><div class="r-val mono-blue">${neo.total_transfers||0} transfers</div></div>`;
+      html += `<div class="r-row"><div class="r-key">Anomalies</div><div class="r-val">${neo.anomaly_count||0} detected</div></div>`;
+      if (neo.chain && neo.chain.length) {
+        neo.chain.forEach((ev, i) => {
+          const from = ev.from_user || (ev.from_user_id ? `User ${ev.from_user_id}` : '—');
+          const to   = ev.to_user   || (ev.to_user_id   ? `User ${ev.to_user_id}`   : '—');
+          html += `<div class="r-row"><div class="r-key mono" style="font-size:10px;">#${i+1} ${ev.action||'transfer'}</div><div class="r-val" style="font-size:11px;">${from} → ${to}${ev.reason ? ' · '+ev.reason : ''}</div></div>`;
+        });
+      }
+      if (neo.anomalies && neo.anomalies.length) {
+        neo.anomalies.forEach(a => {
+          html += `<div class="r-row"><div class="r-key" style="color:var(--red);">${a.type}</div><div class="r-val" style="font-size:11px;">${a.description}</div></div>`;
+        });
+      }
+      html += `</div>`;
+
+      // MongoDB
+      html += `<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin:14px 0 8px;">MONGODB — ACTIVITY LOGS</div><div class="result-card">`;
+      html += `<div class="r-row"><div class="r-key">Log Entries</div><div class="r-val mono-blue">${mongo.log_count||0}</div></div>`;
+      (mongo.recent||[]).slice(0,5).forEach(log => {
+        html += `<div class="r-row"><div class="r-key mono" style="font-size:10px;">${log.timestamp?new Date(log.timestamp).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}):'—'}</div><div class="r-val" style="font-size:11px;">${log.description||log.event_type||'—'}</div></div>`;
+      });
+      html += `</div>`;
+      break;
+    }
+
+    default:
+      html = `<pre style="font-size:11px;font-family:var(--ff-m);padding:16px;background:var(--bg-2);border-radius:8px;overflow-x:auto;">${JSON.stringify(data,null,2)}</pre>`;
+  }
+
+  out.innerHTML = html;
+}
+
+// Boot
+renderInputPanel('evidence_by_case');
+</script>
+{% endblock %}

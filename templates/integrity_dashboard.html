@@ -1,0 +1,247 @@
+{% extends "layout.html" %}
+{% block title %}Integrity — ECMS{% endblock %}
+{% block page_title %}Integrity Dashboard{% endblock %}
+
+{% block extra_styles %}
+.integ-stat { text-align:center; padding:20px 12px; }
+.integ-stat-num { font-family:var(--serif); font-size:32px; font-weight:700; line-height:1; margin-bottom:4px; }
+.integ-stat-label { font-family:var(--mono); font-size:10px; color:var(--text-3); letter-spacing:.8px; text-transform:uppercase; }
+.progress-bar-wrap { background:var(--border); border-radius:4px; height:8px; overflow:hidden; margin:10px 0; }
+.progress-bar { height:100%; border-radius:4px; transition:width .15s ease; }
+.bulk-result-row {
+    display:flex; align-items:center; gap:10px; padding:7px 0;
+    border-bottom:1px solid var(--border); font-size:12px;
+}
+.bulk-result-row:last-child { border-bottom:none; }
+.result-icon { width:16px; height:16px; border-radius:50%; display:flex; align-items:center;
+               justify-content:center; font-size:9px; flex-shrink:0; }
+.result-icon.pass { background:var(--green-bg); color:var(--green); border:1px solid var(--green-border); }
+.result-icon.fail { background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent-border); }
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-header-title">Integrity Verification</div>
+        <div class="page-header-sub">AES-256 decryption · SHA-256 hash check · RSA-2048 signature validation</div>
+    </div>
+</div>
+
+<div class="card mb-16">
+    <div class="card-header"><span class="card-title">Overview</span></div>
+    <div class="card-body" style="padding:0;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);">
+            <div class="integ-stat" style="border-right:1px solid var(--border);">
+                <div class="integ-stat-num" style="color:var(--blue);" id="statTotal">—</div>
+                <div class="integ-stat-label">Total Evidence</div>
+            </div>
+            <div class="integ-stat" style="border-right:1px solid var(--border);">
+                <div class="integ-stat-num" style="color:var(--green);" id="statVerified">—</div>
+                <div class="integ-stat-label">Verified</div>
+            </div>
+            <div class="integ-stat" style="border-right:1px solid var(--border);">
+                <div class="integ-stat-num" style="color:var(--amber);" id="statPending">—</div>
+                <div class="integ-stat-label">Pending</div>
+            </div>
+            <div class="integ-stat">
+                <div class="integ-stat-num" style="color:var(--accent);" id="statFailed">—</div>
+                <div class="integ-stat-label">Failed</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2 mb-16">
+    <div class="card">
+        <div class="card-header"><span class="card-title">Single Verify</span></div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">Evidence ID</label>
+                <div style="display:flex;gap:8px;align-items:flex-end;">
+                    <input type="number" id="singleId" class="form-control" placeholder="e.g. 42" min="1">
+                    <button class="btn btn-primary" onclick="verifySingle()">Verify</button>
+                </div>
+            </div>
+            <div id="singleResult" style="display:none;margin-top:12px;font-size:12px;"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><span class="card-title">Crypto Pipeline</span></div>
+        <div class="card-body">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                {% for num, label, desc, col in [
+                    ('1','AES-256-CBC','File encrypted on upload using master-derived key','var(--blue)'),
+                    ('2','SHA-256 Hash','Computed on plaintext before encryption','var(--green)'),
+                    ('3','RSA-2048 Sign','Hash signed; signature stored in PostgreSQL','var(--amber)'),
+                    ('4','Supabase Store','Encrypted blob uploaded to object storage','var(--text-3)'),
+                ] %}
+                <div style="display:flex;gap:10px;align-items:flex-start;">
+                    <div style="width:20px;height:20px;border-radius:50%;background:var(--bg-card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;color:{{ col }};flex-shrink:0;font-weight:600;">{{ num }}</div>
+                    <div><div style="font-size:12px;font-weight:500;color:{{ col }};">{{ label }}</div>
+                    <div class="mono" style="margin-top:1px;">{{ desc }}</div></div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if role in ['Admin', 'Investigator'] %}
+<div class="card mb-16">
+    <div class="card-header">
+        <span class="card-title">Bulk Verification</span>
+        <button class="btn btn-primary btn-sm" id="bulkBtn" onclick="startBulk()">Run Bulk Verify</button>
+    </div>
+    <div class="card-body">
+        <div id="bulkIdle">
+            <div class="info-box blue" style="font-size:12px;">
+                Verifies all evidence not checked in the last 30 days. SHA-256 hash integrity + RSA signature presence are validated per item.
+            </div>
+        </div>
+        <div id="bulkRunning" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span class="mono" id="bulkLabel" style="font-size:11px;">Preparing…</span>
+                <span class="mono" style="font-size:11px;" id="bulkCounter">0 / 0</span>
+            </div>
+            <div class="progress-bar-wrap">
+                <div class="progress-bar" id="bulkBar" style="width:0%;background:var(--green);"></div>
+            </div>
+            <div style="display:flex;gap:16px;margin-top:8px;font-family:var(--mono);font-size:11px;">
+                <span style="color:var(--green);">✓ <strong id="bp">0</strong> passed</span>
+                <span style="color:var(--accent);">✕ <strong id="bf">0</strong> failed</span>
+            </div>
+        </div>
+        <div id="bulkResults" style="display:none;margin-top:16px;">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text-3);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);" id="bulkSummary"></div>
+            <div id="bulkList"></div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header"><span class="card-title">Verification History</span></div>
+    <div class="card-body">
+        <div id="histLoading" style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--text-3);">
+            <div class="spinner" style="width:14px;height:14px;border-width:2px;"></div> Loading…
+        </div>
+        <div id="histList" style="display:none;"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadStats() {
+    try {
+        const d = await (await fetch('/api/integrity/statistics')).json();
+        document.getElementById('statTotal').textContent = d.total ?? '—';
+        document.getElementById('statVerified').textContent = d.verified ?? '—';
+        document.getElementById('statPending').textContent = d.pending ?? '—';
+        document.getElementById('statFailed').textContent = d.failed ?? '—';
+    } catch(e) {}
+}
+
+async function verifySingle() {
+    const id = document.getElementById('singleId').value.trim();
+    if (!id) return;
+    const box = document.getElementById('singleResult');
+    box.style.display = 'block';
+    box.className = 'info-box blue';
+    box.innerHTML = '<span class="spinner" style="width:11px;height:11px;border-width:2px;vertical-align:middle;margin-right:7px;"></span>Verifying…';
+    try {
+        const r = await fetch(`/evidence/${id}/verify`, {method:'POST'});
+        const d = await r.json();
+        if (d.success) {
+            box.className = 'info-box green';
+            box.innerHTML = `✓ Evidence #${id} integrity verified${d.signature_present?' · RSA signature ✓':''} · ${new Date(d.verified_at).toLocaleString()}`;
+        } else {
+            box.className = 'info-box accent';
+            box.innerHTML = `✕ Failed: ${d.message}`;
+        }
+        loadStats();
+    } catch(e) { box.className='info-box accent'; box.innerHTML='✕ Request failed'; }
+}
+
+{% if role in ['Admin','Investigator'] %}
+async function startBulk() {
+    const btn = document.getElementById('bulkBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner" style="width:11px;height:11px;border-width:2px;"></span> Running…';
+    document.getElementById('bulkIdle').style.display = 'none';
+    document.getElementById('bulkRunning').style.display = 'block';
+    document.getElementById('bulkResults').style.display = 'none';
+    document.getElementById('bp').textContent = '0';
+    document.getElementById('bf').textContent = '0';
+    document.getElementById('bulkBar').style.width = '0%';
+
+    try {
+        const resp = await fetch('/api/evidence/bulk-verify', {
+            method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({days:30})
+        });
+        const data = await resp.json();
+        const results = data.results || [];
+        const total = data.total || results.length;
+
+        // Animate item by item
+        for (let i = 0; i < results.length; i++) {
+            const pct = total ? Math.round(((i+1)/total)*100) : 100;
+            document.getElementById('bulkBar').style.width = pct + '%';
+            document.getElementById('bulkCounter').textContent = `${i+1} / ${total}`;
+            document.getElementById('bp').textContent = results.slice(0,i+1).filter(r=>r.result==='pass').length;
+            document.getElementById('bf').textContent = results.slice(0,i+1).filter(r=>r.result==='fail').length;
+            document.getElementById('bulkLabel').textContent = `Verifying ${results[i].code}…`;
+            await new Promise(res => setTimeout(res, 55));
+        }
+
+        document.getElementById('bulkRunning').style.display = 'none';
+        document.getElementById('bulkResults').style.display = 'block';
+        document.getElementById('bulkSummary').textContent = `${data.passed} passed · ${data.failed} failed · ${total} total items`;
+
+        document.getElementById('bulkList').innerHTML = results.map(r => `
+            <div class="bulk-result-row">
+                <div class="result-icon ${r.result}">${r.result==='pass'?'✓':'✕'}</div>
+                <span class="mono-blue" style="font-size:11px;min-width:140px;">${r.code}</span>
+                <span class="mono" style="font-size:10px;color:var(--text-3);">#${r.evidence_id}</span>
+                <span class="mono" style="font-size:10px;color:var(--text-3);">RSA ${r.has_signature?'✓':'—'}</span>
+                <span style="font-size:11px;font-family:var(--mono);color:${r.result==='pass'?'var(--green)':'var(--accent)'};">${r.result}</span>
+            </div>`).join('');
+
+        btn.innerHTML = 'Run Bulk Verify'; btn.disabled = false;
+        loadStats();
+    } catch(e) {
+        document.getElementById('bulkRunning').style.display = 'none';
+        document.getElementById('bulkIdle').style.display = 'block';
+        document.getElementById('bulkIdle').innerHTML = '<div class="info-box accent" style="font-size:12px;">✕ Bulk verify failed — check server</div>';
+        btn.innerHTML = 'Run Bulk Verify'; btn.disabled = false;
+    }
+}
+{% endif %}
+
+async function loadHistory() {
+    try {
+        const d = await (await fetch('/api/integrity/statistics')).json();
+        document.getElementById('histLoading').style.display = 'none';
+        const items = d.recent_verifications || [];
+        const list = document.getElementById('histList');
+        if (!items.length) {
+            list.innerHTML = '<div class="text-muted" style="font-size:12px;">No history yet — run a verification to begin.</div>';
+        } else {
+            list.innerHTML = items.map(v => `
+                <div class="bulk-result-row">
+                    <div class="result-icon ${v.integrity_verified?'pass':'fail'}">${v.integrity_verified?'✓':'✕'}</div>
+                    <span class="mono-blue" style="font-size:11px;min-width:120px;">${v.evidence_code||'#'+v.evidence_id}</span>
+                    <span class="mono" style="font-size:10px;color:var(--text-3);">${v.verified_at?new Date(v.verified_at).toLocaleString():'—'}</span>
+                </div>`).join('');
+        }
+        list.style.display = 'block';
+    } catch(e) {
+        document.getElementById('histLoading').innerHTML = '<div class="text-muted" style="font-size:12px;">History unavailable</div>';
+    }
+}
+
+loadStats();
+loadHistory();
+</script>
+{% endblock %}

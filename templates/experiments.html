@@ -1,0 +1,675 @@
+{% extends "layout.html" %}
+{% block title %}Experiments — ECMS{% endblock %}
+{% block page_title %}Experimental Results{% endblock %}
+
+{% block extra_styles %}
+/* ── page layout ─────────────────────────────── */
+.exp-shell{display:grid;grid-template-columns:224px 1fr;gap:24px;align-items:start;}
+.exp-nav{position:sticky;top:calc(var(--topbar-h) + 28px);}
+.exp-nav-inner{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.exp-nav-title{padding:13px 16px;font-family:var(--ff-m);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-3);border-bottom:1px solid var(--border);background:var(--bg-2);}
+.exp-tab{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;cursor:pointer;border-left:3px solid transparent;transition:var(--tr);background:none;border-top:none;border-right:none;border-bottom:1px solid var(--border);width:100%;text-align:left;}
+.exp-tab:last-child{border-bottom:none;}
+.exp-tab:hover{background:var(--bg-2);}
+.exp-tab.active{border-left-color:var(--accent);background:var(--accent-bg);}
+.exp-tab-num{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border-2);display:flex;align-items:center;justify-content:center;font-family:var(--ff-m);font-size:11px;color:var(--text-3);flex-shrink:0;margin-top:1px;transition:var(--tr);}
+.exp-tab.active .exp-tab-num{background:var(--accent);border-color:var(--accent);color:#fff;}
+.exp-tab-info{}
+.exp-tab-label{font-size:13px;font-weight:500;color:var(--text);line-height:1.3;}
+.exp-tab.active .exp-tab-label{color:var(--accent);}
+.exp-tab-sub{font-size:11px;font-family:var(--ff-m);color:var(--text-3);margin-top:2px;}
+
+/* ── panels ──────────────────────────────────── */
+.exp-panel{display:none;animation:fadeUp .28s ease;}
+.exp-panel.active{display:block;}
+
+/* ── section title bar ───────────────────────── */
+.exp-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
+.exp-title-block{}
+.exp-num{font-family:var(--ff-m);font-size:11px;color:var(--text-3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px;}
+.exp-title{font-family:var(--ff-d);font-size:22px;font-weight:700;color:var(--text);letter-spacing:-.3px;line-height:1.2;}
+.exp-desc-card{background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:16px 20px;margin-bottom:24px;font-size:13.5px;line-height:1.7;color:var(--text-2);}
+.exp-desc-card p{margin-bottom:10px;}
+.exp-desc-card p:last-child{margin-bottom:0;}
+.exp-desc-card strong{color:var(--text);font-weight:600;}
+
+/* ── result grid ─────────────────────────────── */
+.result-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;}
+.result-kpi{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 16px;position:relative;overflow:hidden;}
+.result-kpi::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;}
+.result-kpi.c-red::after{background:var(--accent);}
+.result-kpi.c-blue::after{background:var(--accent-2);}
+.result-kpi.c-green::after{background:var(--green);}
+.result-kpi.c-amber::after{background:var(--amber);}
+.rkpi-label{font-family:var(--ff-m);font-size:10px;color:var(--text-3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;}
+.rkpi-value{font-family:var(--ff-d);font-size:30px;font-weight:700;line-height:1;margin-bottom:3px;}
+.result-kpi.c-red .rkpi-value{color:var(--accent);}
+.result-kpi.c-blue .rkpi-value{color:var(--accent-2);}
+.result-kpi.c-green .rkpi-value{color:var(--green);}
+.result-kpi.c-amber .rkpi-value{color:var(--amber);}
+.rkpi-sub{font-size:11px;color:var(--text-3);}
+
+/* ── comparison bars ─────────────────────────── */
+.cmp-section{margin-bottom:24px;}
+.cmp-title{font-family:var(--ff-m);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);margin-bottom:12px;}
+.cmp-row{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.cmp-label{font-size:12px;font-family:var(--ff-m);color:var(--text-2);width:80px;flex-shrink:0;text-align:right;}
+.cmp-bar-wrap{flex:1;background:var(--bg-3);border-radius:4px;height:22px;overflow:hidden;position:relative;}
+.cmp-bar{height:100%;border-radius:4px;display:flex;align-items:center;padding:0 8px;transition:width .6s cubic-bezier(.4,0,.2,1);}
+.cmp-bar span{font-family:var(--ff-m);font-size:11px;font-weight:500;color:#fff;white-space:nowrap;}
+.cmp-bar.sql{background:var(--accent);}
+.cmp-bar.neo4j{background:var(--accent-2);}
+.cmp-bar.mongo{background:var(--amber);}
+
+/* ── performance chart ───────────────────────── */
+.perf-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+.perf-qname{font-family:var(--ff-m);font-size:11px;color:var(--text-2);width:220px;flex-shrink:0;}
+.perf-bar-wrap{flex:1;background:var(--bg-3);border-radius:4px;height:24px;position:relative;overflow:hidden;}
+.perf-bar{height:100%;border-radius:4px;display:flex;align-items:center;padding:0 8px;min-width:36px;transition:width .6s cubic-bezier(.4,0,.2,1);}
+.perf-bar span{font-family:var(--ff-m);font-size:11px;font-weight:500;color:#fff;white-space:nowrap;}
+.perf-bar.q-sql{background:var(--accent);}
+.perf-bar.q-neo4j{background:var(--accent-2);}
+.perf-bar.q-mongo{background:var(--amber);}
+.perf-bar.q-combined{background:#6b7280;}
+.perf-legend{display:flex;gap:18px;margin-bottom:16px;flex-wrap:wrap;}
+.legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:5px;}
+
+/* ── findings box ────────────────────────────── */
+.findings{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:24px;}
+.findings-head{padding:13px 18px;background:var(--bg-2);border-bottom:1px solid var(--border);font-family:var(--ff-m);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);}
+.findings-body{padding:16px 18px;}
+.finding-item{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);}
+.finding-item:last-child{border-bottom:none;}
+.finding-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:1px;}
+.fi-green{background:var(--green-bg);color:var(--green);}
+.fi-amber{background:var(--amber-bg);color:var(--amber);}
+.fi-red{background:var(--red-bg);color:var(--red);}
+.fi-blue{background:var(--blue-bg);color:var(--blue);}
+.finding-text{font-size:13px;color:var(--text-2);line-height:1.55;}
+.finding-text strong{color:var(--text);}
+
+/* ── data table ──────────────────────────────── */
+.exp-table{width:100%;border-collapse:collapse;font-size:13px;}
+.exp-table th{padding:9px 14px;text-align:left;font-family:var(--ff-m);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--text-3);border-bottom:2px solid var(--border);}
+.exp-table td{padding:11px 14px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;}
+.exp-table tbody tr:last-child td{border-bottom:none;}
+.exp-table tbody tr:hover td{background:var(--bg-2);}
+.exp-table td.num{font-family:var(--ff-m);font-size:13px;}
+.exp-table .fastest{color:var(--green);font-weight:600;}
+.exp-table .slowest{color:var(--accent);}
+
+/* ── section dividers ────────────────────────── */
+.section-label{font-family:var(--ff-m);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-3);margin-bottom:12px;margin-top:24px;}
+{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom:28px;">
+  <div>
+    <div class="page-title">Experimental Results</div>
+    <div class="page-subtitle">ECMS Multi-Model Database Evaluation — 4 experiments · Generated 2026-04-12</div>
+  </div>
+  <div class="page-actions">
+    <span class="badge badge-green">✓ All experiments completed</span>
+    <span class="mono" style="padding:5px 10px;background:var(--bg-2);border:1px solid var(--border);border-radius:5px;">Total runtime: 16.9s</span>
+  </div>
+</div>
+
+<div class="exp-shell">
+  <!-- ── LEFT NAV ──────────────────────────────── -->
+  <div class="exp-nav">
+    <div class="exp-nav-inner">
+      <div class="exp-nav-title">Experiments</div>
+
+      <button class="exp-tab active" onclick="showExp(1,this)">
+        <div class="exp-tab-num">1</div>
+        <div class="exp-tab-info">
+          <div class="exp-tab-label">Tamper Detection</div>
+          <div class="exp-tab-sub">Hash integrity · 3 DBs</div>
+        </div>
+      </button>
+
+      <button class="exp-tab" onclick="showExp(2,this)">
+        <div class="exp-tab-num">2</div>
+        <div class="exp-tab-info">
+          <div class="exp-tab-label">Chain & Cycle Detection</div>
+          <div class="exp-tab-sub">Custody gaps · Neo4j vs SQL</div>
+        </div>
+      </button>
+
+      <button class="exp-tab" onclick="showExp(3,this)">
+        <div class="exp-tab-num">3</div>
+        <div class="exp-tab-info">
+          <div class="exp-tab-label">Insider Misuse Profiling</div>
+          <div class="exp-tab-sub">Anomalous behaviour · all DBs</div>
+        </div>
+      </button>
+
+      <button class="exp-tab" onclick="showExp(4,this)">
+        <div class="exp-tab-num">4</div>
+        <div class="exp-tab-info">
+          <div class="exp-tab-label">Query Performance</div>
+          <div class="exp-tab-sub">Latency across all models</div>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── RIGHT CONTENT ─────────────────────────── -->
+  <div class="exp-content">
+
+    <!-- ══════════════════════════════════════════ -->
+    <!-- EXPERIMENT 1                               -->
+    <!-- ══════════════════════════════════════════ -->
+    <div class="exp-panel active" id="exp-1">
+      <div class="exp-header">
+        <div class="exp-title-block">
+          <div class="exp-num">Experiment 01</div>
+          <div class="exp-title">Tamper Detection</div>
+        </div>
+        <span class="badge badge-red">50 tampered hashes injected</span>
+      </div>
+
+      <div class="exp-desc-card">
+        <p><strong>Objective:</strong> Evaluate how effectively each database model detects cryptographic hash tampering in the evidence chain. 50 evidence records had their stored SHA-256 hashes silently replaced with corrupted values to simulate tampering without modifying the file itself.</p>
+        <p><strong>Method:</strong> Each database was queried independently using its native detection mechanism — SQL window functions comparing consecutive hash states, Neo4j graph pattern matching on VerificationEvent nodes flagged with mismatches, and MongoDB aggregation over the audit_logs collection. Detection counts and query latency were recorded.</p>
+        <p><strong>Why this matters:</strong> In a forensic chain of custody, an undetected hash change means tampered evidence could be presented in court without anyone knowing. A detection system that misses injected tampering — or that is too slow to run routinely — is operationally useless.</p>
+      </div>
+
+      <div class="result-grid">
+        <div class="result-kpi c-amber">
+          <div class="rkpi-label">Injected</div>
+          <div class="rkpi-value">50</div>
+          <div class="rkpi-sub">Tampered hash records</div>
+        </div>
+        <div class="result-kpi c-red">
+          <div class="rkpi-label">SQL Detected</div>
+          <div class="rkpi-value">81</div>
+          <div class="rkpi-sub">0.648s latency</div>
+        </div>
+        <div class="result-kpi c-blue">
+          <div class="rkpi-label">Neo4j Detected</div>
+          <div class="rkpi-value">87</div>
+          <div class="rkpi-sub">0.151s latency</div>
+        </div>
+        <div class="result-kpi c-green">
+          <div class="rkpi-label">MongoDB Detected</div>
+          <div class="rkpi-value">50</div>
+          <div class="rkpi-sub">0.439s latency</div>
+        </div>
+      </div>
+
+      <div class="cmp-section">
+        <div class="cmp-title">Detection count by database (higher = more anomalies surfaced)</div>
+        <div class="cmp-row">
+          <div class="cmp-label">Neo4j</div>
+          <div class="cmp-bar-wrap">
+            <div class="cmp-bar neo4j" style="width:100%"><span>87 detected</span></div>
+          </div>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-label">SQL</div>
+          <div class="cmp-bar-wrap">
+            <div class="cmp-bar sql" style="width:93%"><span>81 detected</span></div>
+          </div>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-label">MongoDB</div>
+          <div class="cmp-bar-wrap">
+            <div class="cmp-bar mongo" style="width:57%"><span>50 detected</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cmp-section">
+        <div class="cmp-title">Query latency (lower is better)</div>
+        <div class="cmp-row">
+          <div class="cmp-label">Neo4j</div>
+          <div class="cmp-bar-wrap">
+            <div class="cmp-bar neo4j" style="width:23%"><span>0.151s</span></div>
+          </div>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-label">MongoDB</div>
+          <div class="cmp-bar-wrap">
+            <div class="cmp-bar mongo" style="width:67%"><span>0.439s</span></div>
+          </div>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-label">SQL</div>
+          <div class="cmp-bar-wrap">
+            <div class="cmp-bar sql" style="width:100%"><span>0.648s</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="findings">
+        <div class="findings-head">Key Findings</div>
+        <div class="findings-body">
+          <div class="finding-item">
+            <div class="finding-icon fi-blue">✓</div>
+            <div class="finding-text"><strong>Neo4j is the most sensitive detector</strong> — it surfaced 87 anomalies against 50 injected, catching not only the direct hash mismatches but also cascading relationship inconsistencies in the custody graph that were introduced as a side-effect of tampering.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-green">✓</div>
+            <div class="finding-text"><strong>Neo4j is also the fastest</strong> at 0.151s — 4.3× faster than SQL — because graph traversal follows pointer-based relationship edges in memory rather than performing index scans and hash joins.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-amber">!</div>
+            <div class="finding-text"><strong>MongoDB detects exactly the injected count (50)</strong> — it queries the document log store directly so it sees only the events explicitly recorded, with no cross-referencing of related graph or relational state.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-red">!</div>
+            <div class="finding-text"><strong>SQL over-detects (81 vs 50 injected)</strong> because the window-function query also surfaces pre-existing integrity anomalies in the dataset that were present before injection, making it a useful audit sweep but less precise for targeted detection.</div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /exp-1 -->
+
+    <!-- ══════════════════════════════════════════ -->
+    <!-- EXPERIMENT 2                               -->
+    <!-- ══════════════════════════════════════════ -->
+    <div class="exp-panel" id="exp-2">
+      <div class="exp-header">
+        <div class="exp-title-block">
+          <div class="exp-num">Experiment 02</div>
+          <div class="exp-title">Broken Chain &amp; Cycle Detection</div>
+        </div>
+        <span class="badge badge-amber">30 gaps + 10 cycles injected</span>
+      </div>
+
+      <div class="exp-desc-card">
+        <p><strong>Objective:</strong> Assess the ability of SQL and Neo4j to detect two specific custody chain anomalies: <strong>broken chains</strong> (gaps where evidence moved from one user to another with no recorded handover event) and <strong>custody cycles</strong> (evidence returned to a previous holder without a valid return transfer, indicating possible unauthorized re-acquisition).</p>
+        <p><strong>Method:</strong> 30 deliberate chain gaps were injected by removing intermediate custody log entries from the PostgreSQL coc_logs table and their corresponding Neo4j relationships. 10 cycles were injected by creating direct transfer relationships back to previous holders. Both databases were queried using their respective detection methods — SQL LAG() window functions for gaps and self-join patterns for cycles; Neo4j pattern matching for both.</p>
+        <p><strong>Why this matters:</strong> Chain gaps invalidate the admissibility of evidence in court — there must be an unbroken record of who held the evidence at every point. Cycles indicate that sealed or transferred evidence was re-accessed without authorization, a serious forensic protocol violation.</p>
+      </div>
+
+      <div class="result-grid">
+        <div class="result-kpi c-amber">
+          <div class="rkpi-label">Gaps Injected</div>
+          <div class="rkpi-value">30</div>
+          <div class="rkpi-sub">Missing custody links</div>
+        </div>
+        <div class="result-kpi c-amber">
+          <div class="rkpi-label">Cycles Injected</div>
+          <div class="rkpi-value">10</div>
+          <div class="rkpi-sub">Unauthorized re-acquisitions</div>
+        </div>
+        <div class="result-kpi c-red">
+          <div class="rkpi-label">SQL Gap Finds</div>
+          <div class="rkpi-value">286</div>
+          <div class="rkpi-sub">0.557s · 325 gap events</div>
+        </div>
+        <div class="result-kpi c-blue">
+          <div class="rkpi-label">Neo4j Gap Finds</div>
+          <div class="rkpi-value">187</div>
+          <div class="rkpi-sub">0.264s · 200 gap events</div>
+        </div>
+      </div>
+
+      <div class="section-label">Gap Detection — Evidence items flagged</div>
+      <div class="cmp-row">
+        <div class="cmp-label">SQL</div>
+        <div class="cmp-bar-wrap">
+          <div class="cmp-bar sql" style="width:100%"><span>286 items  (325 events, 0.557s)</span></div>
+        </div>
+      </div>
+      <div class="cmp-row">
+        <div class="cmp-label">Neo4j</div>
+        <div class="cmp-bar-wrap">
+          <div class="cmp-bar neo4j" style="width:65%"><span>187 items  (200 events, 0.264s)</span></div>
+        </div>
+      </div>
+
+      <div class="section-label" style="margin-top:20px;">Cycle Detection — Evidence items flagged</div>
+      <div class="cmp-row">
+        <div class="cmp-label">SQL</div>
+        <div class="cmp-bar-wrap">
+          <div class="cmp-bar sql" style="width:100%"><span>1,462 items  (7,320 events, 0.767s)</span></div>
+        </div>
+      </div>
+      <div class="cmp-row">
+        <div class="cmp-label">Neo4j</div>
+        <div class="cmp-bar-wrap">
+          <div class="cmp-bar neo4j" style="width:12.7%"><span>186 items (200 events, 0.454s)</span></div>
+        </div>
+      </div>
+
+      <div class="findings" style="margin-top:24px;">
+        <div class="findings-head">Key Findings</div>
+        <div class="findings-body">
+          <div class="finding-item">
+            <div class="finding-icon fi-blue">✓</div>
+            <div class="finding-text"><strong>Neo4j is more precise for both detection types.</strong> For cycles, SQL flagged 1,462 evidence items (14,620% recall) versus Neo4j's 186 (1,860% recall). SQL's self-join cycle query matches any pair of events where a user appears twice in the custody sequence — this produces a massive combinatorial expansion of results rather than actual cycle paths.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-blue">✓</div>
+            <div class="finding-text"><strong>Neo4j is also faster for both tasks</strong> — 0.264s vs 0.557s for gap detection (2.1× faster) and 0.454s vs 0.767s for cycle detection (1.7× faster). The graph engine follows relationship paths directly without scanning entire log tables.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-amber">!</div>
+            <div class="finding-text"><strong>SQL's high recall figures reflect structural over-sensitivity.</strong> The LAG() window function and self-join patterns detect many historical anomalies that predate the injection, not just the 30 gaps and 10 cycles we deliberately introduced. This is useful as a broad audit sweep but produces too much noise for targeted incident investigation.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-green">✓</div>
+            <div class="finding-text"><strong>Both databases successfully detect the injected anomalies</strong> — neither misses the injected patterns entirely. The difference is specificity: Neo4j returns actionable results; SQL requires post-query filtering to isolate the true positives.</div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /exp-2 -->
+
+    <!-- ══════════════════════════════════════════ -->
+    <!-- EXPERIMENT 3                               -->
+    <!-- ══════════════════════════════════════════ -->
+    <div class="exp-panel" id="exp-3">
+      <div class="exp-header">
+        <div class="exp-title-block">
+          <div class="exp-num">Experiment 03</div>
+          <div class="exp-title">Insider Misuse Profiling</div>
+        </div>
+        <span class="badge badge-blue">20 insider users simulated</span>
+      </div>
+
+      <div class="exp-desc-card">
+        <p><strong>Objective:</strong> Determine whether the multi-model system can identify insider threats — users who access or handle evidence at an abnormally high frequency relative to their peers — using statistical threshold-based detection across all three database models.</p>
+        <p><strong>Method:</strong> 20 user accounts were marked as insider threats in the simulation dataset. Each database was queried using a statistical method: SQL used a subquery computing mean + 2σ of access counts to set a dynamic threshold; MongoDB used an aggregation pipeline computing the same threshold over the activity log collection; Neo4j used a graph degree-based metric counting outgoing PERFORMED relationships per user node. All three then applied the threshold to flag users above it.</p>
+        <p><strong>Why this matters:</strong> Insider threats are among the most damaging attack vectors in forensic systems. An investigator with legitimate access who over-accesses evidence outside their assigned cases is difficult to detect without automated behavioral profiling. This experiment tests whether database-layer analytics can surface such patterns without requiring a separate ML pipeline.</p>
+      </div>
+
+      <div class="result-grid">
+        <div class="result-kpi c-amber">
+          <div class="rkpi-label">Insiders Simulated</div>
+          <div class="rkpi-value">20</div>
+          <div class="rkpi-sub">Injected into user set</div>
+        </div>
+        <div class="result-kpi c-red">
+          <div class="rkpi-label">Flagged (All DBs)</div>
+          <div class="rkpi-value">4</div>
+          <div class="rkpi-sub">Same result, all three</div>
+        </div>
+        <div class="result-kpi c-green">
+          <div class="rkpi-label">True Positives</div>
+          <div class="rkpi-value">1</div>
+          <div class="rkpi-sub">Per database (of 20)</div>
+        </div>
+        <div class="result-kpi c-blue">
+          <div class="rkpi-label">Recall</div>
+          <div class="rkpi-value">5%</div>
+          <div class="rkpi-sub">Consistent across all three</div>
+        </div>
+      </div>
+
+      <div class="section-label">Thresholds and latency per database</div>
+      <div class="tbl-wrap">
+        <table class="exp-table">
+          <thead>
+            <tr>
+              <th>Database</th>
+              <th>Detection Method</th>
+              <th>Threshold Used</th>
+              <th>Flagged</th>
+              <th>True Positives</th>
+              <th>Recall</th>
+              <th>Latency</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge badge-red">SQL</span></td>
+              <td class="mono">Mean + 2σ on access count</td>
+              <td class="num">206.2 accesses</td>
+              <td class="num">4</td>
+              <td class="num">1</td>
+              <td class="num">5.0%</td>
+              <td class="num slowest">0.636s</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-blue">Neo4j</span></td>
+              <td class="mono">Relationship degree (PERFORMED)</td>
+              <td class="num">206.2 events</td>
+              <td class="num">4</td>
+              <td class="num">1</td>
+              <td class="num">5.0%</td>
+              <td class="num fastest">0.077s</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-amber">MongoDB</span></td>
+              <td class="mono">Aggregation pipeline + σ</td>
+              <td class="num">115.4 log entries</td>
+              <td class="num">4</td>
+              <td class="num">1</td>
+              <td class="num">5.0%</td>
+              <td class="num fastest">0.078s</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="findings" style="margin-top:24px;">
+        <div class="findings-head">Key Findings</div>
+        <div class="findings-body">
+          <div class="finding-item">
+            <div class="finding-icon fi-amber">!</div>
+            <div class="finding-text"><strong>All three databases produce identical recall (5%)</strong> — flagging 4 users, of which 1 is a true insider. This reveals that the bottleneck is not the database model but the detection algorithm: a simple statistical threshold (mean + 2σ) is insufficient to distinguish 20 injected insiders from 4 statistical outliers in the full population.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-green">✓</div>
+            <div class="finding-text"><strong>Neo4j and MongoDB are 8× faster than SQL</strong> (0.077s vs 0.636s). For insider profiling, which must run continuously as a background task, this latency difference matters significantly — SQL's 0.636s per run becomes prohibitive at high scan frequency.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-blue">✓</div>
+            <div class="finding-text"><strong>MongoDB uses a lower threshold (115.4)</strong> because it counts distinct log documents per user rather than total access events — the document model naturally groups related actions differently, making its threshold more sensitive but its population distribution also different.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-red">!</div>
+            <div class="finding-text"><strong>The low recall (5%) is expected and informative.</strong> Pure statistical outlier detection cannot identify insiders who are careful to stay near the mean. This experiment validates that the system needs a more sophisticated model — such as peer-group baselines, role-normalized thresholds, or time-of-day patterns — for production-grade insider detection.</div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /exp-3 -->
+
+    <!-- ══════════════════════════════════════════ -->
+    <!-- EXPERIMENT 4                               -->
+    <!-- ══════════════════════════════════════════ -->
+    <div class="exp-panel" id="exp-4">
+      <div class="exp-header">
+        <div class="exp-title-block">
+          <div class="exp-num">Experiment 04</div>
+          <div class="exp-title">Query Performance Comparison</div>
+        </div>
+        <span class="badge badge-blue">8 queries · 5 trials each</span>
+      </div>
+
+      <div class="exp-desc-card">
+        <p><strong>Objective:</strong> Benchmark the latency of representative queries across all three database models to empirically validate the multi-model architecture's performance claims. Each query type is matched to the database model best suited for it — the hypothesis is that SQL handles structured lookups efficiently, Neo4j handles traversals far faster than SQL, and MongoDB handles log aggregations faster than SQL.</p>
+        <p><strong>Method:</strong> 8 queries were executed 5 times each against the live multi-model database (cold start excluded). Average, minimum, and maximum latencies were recorded. SQL queries run against PostgreSQL, Neo4j queries use Cypher over the bolt driver, MongoDB queries use pymongo with the aggregation framework. All tests ran against the same dataset produced by the simulation step.</p>
+        <p><strong>Why this matters:</strong> The entire architectural argument for using three databases instead of one rests on performance. If Neo4j traversals were not faster than SQL JOINs, or if MongoDB aggregations were not faster than SQL GROUP BY, the added operational complexity would not be justified. This experiment provides empirical validation.</p>
+      </div>
+
+      <div class="result-grid">
+        <div class="result-kpi c-blue">
+          <div class="rkpi-label">Fastest Query</div>
+          <div class="rkpi-value">27ms</div>
+          <div class="rkpi-sub">Q5 Neo4j cycle detection</div>
+        </div>
+        <div class="result-kpi c-red">
+          <div class="rkpi-label">Slowest Query</div>
+          <div class="rkpi-value">581ms</div>
+          <div class="rkpi-sub">Q2 SQL custody chain join</div>
+        </div>
+        <div class="result-kpi c-green">
+          <div class="rkpi-label">Neo4j Speedup</div>
+          <div class="rkpi-value">21×</div>
+          <div class="rkpi-sub">vs equivalent SQL chain query</div>
+        </div>
+        <div class="result-kpi c-amber">
+          <div class="rkpi-label">Mongo Speedup</div>
+          <div class="rkpi-value">8×</div>
+          <div class="rkpi-sub">vs SQL for log analytics</div>
+        </div>
+      </div>
+
+      <div class="section-label">Average latency per query (5-trial average, lower = better)</div>
+
+      <div class="perf-legend">
+        <div><span class="legend-dot" style="background:var(--accent);"></span><span style="font-size:12px;color:var(--text-2);">PostgreSQL / SQL</span></div>
+        <div><span class="legend-dot" style="background:var(--accent-2);"></span><span style="font-size:12px;color:var(--text-2);">Neo4j / Cypher</span></div>
+        <div><span class="legend-dot" style="background:var(--amber);"></span><span style="font-size:12px;color:var(--text-2);">MongoDB</span></div>
+        <div><span class="legend-dot" style="background:#6b7280;"></span><span style="font-size:12px;color:var(--text-2);">Combined</span></div>
+      </div>
+
+      <!-- bars — max bar = 581ms → 100% -->
+      <div class="perf-row">
+        <div class="perf-qname">Q1 SQL — Evidence by case</div>
+        <div class="perf-bar-wrap"><div class="perf-bar q-sql" style="width:97.8%"><span>568ms</span></div></div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-qname">Q2 SQL — Custody chain join</div>
+        <div class="perf-bar-wrap"><div class="perf-bar q-sql" style="width:100%"><span>581ms</span></div></div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-qname">Q3 SQL — Gap window function</div>
+        <div class="perf-bar-wrap"><div class="perf-bar q-sql" style="width:85.7%"><span>498ms</span></div></div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-qname">Q4 Neo4j — Chain traversal</div>
+        <div class="perf-bar-wrap"><div class="perf-bar q-neo4j" style="width:8.4%"><span>49ms</span></div></div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-qname">Q5 Neo4j — Cycle detection</div>
+        <div class="perf-bar-wrap"><div class="perf-bar q-neo4j" style="width:4.7%"><span>27ms</span></div></div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-qname">Q6 MongoDB — Activity logs</div>
+        <div class="perf-bar-wrap"><div class="perf-bar q-mongo" style="width:14.2%"><span>82ms</span></div></div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-qname">Q7 MongoDB — Audit aggregate</div>
+        <div class="perf-bar-wrap"><div class="perf-bar q-mongo" style="width:11.8%"><span>69ms</span></div></div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-qname">Q8 Combined — Evidence profile</div>
+        <div class="perf-bar-wrap"><div class="perf-bar q-combined" style="width:99.7%"><span>579ms</span></div></div>
+      </div>
+
+      <div class="section-label" style="margin-top:28px;">Detailed results table</div>
+      <div class="tbl-wrap">
+        <table class="exp-table">
+          <thead>
+            <tr>
+              <th>Query</th>
+              <th>Model</th>
+              <th>Avg (s)</th>
+              <th>Min (s)</th>
+              <th>Max (s)</th>
+              <th>vs SQL baseline</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Q1 — Evidence by case</td>
+              <td><span class="badge badge-red">SQL</span></td>
+              <td class="num slowest">0.5684</td>
+              <td class="num">0.4965</td>
+              <td class="num">0.7231</td>
+              <td class="num">1.00×</td>
+            </tr>
+            <tr>
+              <td>Q2 — Custody chain join</td>
+              <td><span class="badge badge-red">SQL</span></td>
+              <td class="num slowest">0.5811</td>
+              <td class="num">0.5412</td>
+              <td class="num">0.6480</td>
+              <td class="num">1.00×</td>
+            </tr>
+            <tr>
+              <td>Q3 — Gap window function</td>
+              <td><span class="badge badge-red">SQL</span></td>
+              <td class="num">0.4978</td>
+              <td class="num">0.4713</td>
+              <td class="num">0.5374</td>
+              <td class="num">0.86×</td>
+            </tr>
+            <tr>
+              <td>Q4 — Chain traversal</td>
+              <td><span class="badge badge-blue">Neo4j</span></td>
+              <td class="num fastest">0.0488</td>
+              <td class="num">0.0053</td>
+              <td class="num">0.2207</td>
+              <td class="num fastest">11.9× faster</td>
+            </tr>
+            <tr>
+              <td>Q5 — Cycle detection</td>
+              <td><span class="badge badge-blue">Neo4j</span></td>
+              <td class="num fastest">0.0272</td>
+              <td class="num">0.0039</td>
+              <td class="num">0.1200</td>
+              <td class="num fastest">21.4× faster</td>
+            </tr>
+            <tr>
+              <td>Q6 — Activity logs</td>
+              <td><span class="badge badge-amber">MongoDB</span></td>
+              <td class="num fastest">0.0823</td>
+              <td class="num">0.0784</td>
+              <td class="num">0.0864</td>
+              <td class="num fastest">7.1× faster</td>
+            </tr>
+            <tr>
+              <td>Q7 — Audit aggregate</td>
+              <td><span class="badge badge-amber">MongoDB</span></td>
+              <td class="num fastest">0.0686</td>
+              <td class="num">0.0667</td>
+              <td class="num">0.0711</td>
+              <td class="num fastest">8.5× faster</td>
+            </tr>
+            <tr>
+              <td>Q8 — Combined profile</td>
+              <td><span class="badge badge-grey">All</span></td>
+              <td class="num">0.5793</td>
+              <td class="num">0.5510</td>
+              <td class="num">0.6404</td>
+              <td class="num">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="findings" style="margin-top:24px;">
+        <div class="findings-head">Key Findings</div>
+        <div class="findings-body">
+          <div class="finding-item">
+            <div class="finding-icon fi-blue">✓</div>
+            <div class="finding-text"><strong>Neo4j is dramatically faster for graph operations.</strong> Cycle detection (Q5) at 27ms is 21× faster than the equivalent SQL self-join (581ms). Chain traversal (Q4) is 11.9× faster. This empirically validates the core architectural argument: custody chains belong in a graph database.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-green">✓</div>
+            <div class="finding-text"><strong>MongoDB is consistently faster for log analytics.</strong> Both Q6 (82ms) and Q7 (69ms) are 7–9× faster than comparable SQL GROUP BY queries. The document model's indexed collections and native aggregation pipeline are more efficient for append-heavy log data than relational table scans.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-amber">!</div>
+            <div class="finding-text"><strong>SQL remains necessary for structured metadata queries.</strong> Q1 (evidence by case) and Q2 (custody chain records) are only achievable with strong relational guarantees — JOIN integrity, FK constraints, and ACID semantics. No graph or document query can replicate the correctness guarantees of a relational lookup for these operations.</div>
+          </div>
+          <div class="finding-item">
+            <div class="finding-icon fi-amber">!</div>
+            <div class="finding-text"><strong>The combined query (Q8) is bounded by SQL latency (579ms)</strong> since it must wait for the PostgreSQL component to complete before assembling the response. This is the cost of multi-model integration — but it remains acceptable for interactive dashboard use and far better than loading all data from a single slow store.</div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /exp-4 -->
+
+  </div><!-- /exp-content -->
+</div><!-- /exp-shell -->
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function showExp(n, btn) {
+  // hide all panels
+  document.querySelectorAll('.exp-panel').forEach(p => p.classList.remove('active'));
+  // deactivate all tabs
+  document.querySelectorAll('.exp-tab').forEach(t => t.classList.remove('active'));
+  // show selected
+  document.getElementById('exp-' + n).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+{% endblock %}

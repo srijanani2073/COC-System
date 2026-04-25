@@ -1,0 +1,163 @@
+{% extends "layout.html" %}
+{% block title %}Alerts — ECMS{% endblock %}
+{% block page_title %}Security Alerts{% endblock %}
+
+{% block extra_styles %}
+.alert-row {
+    display: flex; gap: 14px; padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    align-items: flex-start;
+    transition: background var(--transition);
+}
+.alert-row:last-child { border-bottom: none; }
+.alert-row:hover { background: var(--bg-hover); }
+.alert-sev {
+    flex-shrink: 0; width: 6px; border-radius: 3px;
+    align-self: stretch; margin-top: 2px;
+}
+.sev-high   { background: var(--accent); }
+.sev-medium { background: var(--amber); }
+.sev-low    { background: var(--blue); }
+.sev-info   { background: var(--text-3); }
+.alert-body { flex: 1; }
+.alert-desc { font-size: 13px; color: var(--text); line-height: 1.4; margin-bottom: 4px; }
+.alert-meta { font-family: var(--mono); font-size: 10px; color: var(--text-3); }
+.alert-badge { font-family: var(--mono); font-size: 9px; letter-spacing: 1px;
+               text-transform: uppercase; padding: 2px 8px; border-radius: 3px;
+               border: 1px solid; flex-shrink: 0; margin-top: 2px; }
+.tab-group { display: flex; gap: 0; border: 1px solid var(--border); border-radius: var(--radius);
+             overflow: hidden; width: fit-content; margin-bottom: 20px; }
+.tab-btn { padding: 7px 18px; font-size: 12px; font-weight: 500; cursor: pointer;
+           background: var(--bg-card2); color: var(--text-2); border: none;
+           font-family: var(--sans); transition: all var(--transition); }
+.tab-btn.active { background: var(--accent); color: #fff; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-header-title">Alerts</div>
+        <div class="page-header-sub">Security events, failed logins, evidence anomalies</div>
+    </div>
+</div>
+
+<div class="tab-group">
+    <button class="tab-btn active" onclick="showTab('evidence',this)">Evidence Alerts</button>
+    <button class="tab-btn" onclick="showTab('logins',this)">Failed Logins</button>
+    <button class="tab-btn" onclick="showTab('security',this)">Security Events</button>
+</div>
+
+<!-- Evidence Alerts -->
+<div id="evidenceTab" class="tab-panel active">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Evidence Anomalies</span>
+            <span class="mono" style="color:var(--text-3);">{{ alerts|length }} alert{% if alerts|length != 1 %}s{% endif %}</span>
+        </div>
+        {% if alerts %}
+        {% for a in alerts %}
+        <div class="alert-row">
+            <div class="alert-sev sev-{{ a.severity or 'info' }}"></div>
+            <div class="alert-body">
+                <div class="alert-desc">{{ a.description }}</div>
+                <div class="alert-meta">
+                    {{ a.timestamp | ist_dt if a.timestamp else '—' }}
+                    {% if a.evidence_id %} · Evidence #{{ a.evidence_id }}{% endif %}
+                    {% if a.case_id %} · Case #{{ a.case_id }}{% endif %}
+                    {% if a.user_id %} · User #{{ a.user_id }}{% endif %}
+                </div>
+            </div>
+            <span class="alert-badge" style="
+                {% if a.severity == 'high' %}color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);
+                {% elif a.severity == 'medium' %}color:var(--amber);border-color:var(--amber-border);background:var(--amber-bg);
+                {% else %}color:var(--blue);border-color:var(--blue-border);background:var(--blue-bg);{% endif %}
+            ">{{ a.severity or 'info' }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty-state" style="padding:56px 24px;">
+            <div class="empty-state-title">No evidence alerts</div>
+            <div class="text-muted">All evidence anomaly checks passed.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Failed Logins -->
+<div id="loginsTab" class="tab-panel">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Failed Login Attempts</span>
+            <span class="mono" style="color:var(--text-3);">last 20</span>
+        </div>
+        {% if failed_logins %}
+        {% for fl in failed_logins %}
+        <div class="alert-row">
+            <div class="alert-sev sev-medium"></div>
+            <div class="alert-body">
+                <div class="alert-desc">
+                    Failed login for <strong class="mono-accent">{{ fl.username }}</strong>
+                    from <span class="mono">{{ fl.ip_address }}</span>
+                </div>
+                <div class="alert-meta">
+                    {{ fl.timestamp | ist_full if fl.timestamp else '—' }}
+                    {% if fl.user_agent %} · {{ fl.user_agent[:60] }}{% if fl.user_agent|length > 60 %}…{% endif %}{% endif %}
+                </div>
+            </div>
+            <span class="alert-badge" style="color:var(--amber);border-color:var(--amber-border);background:var(--amber-bg);">failed</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty-state" style="padding:56px 24px;">
+            <div class="empty-state-title">No failed logins recorded</div>
+            <div class="text-muted">All login attempts have succeeded.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Security Events -->
+<div id="securityTab" class="tab-panel">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Security Events</span>
+            <span class="mono" style="color:var(--text-3);">brute-force, anomalies</span>
+        </div>
+        {% if security_alerts %}
+        {% for sa in security_alerts %}
+        <div class="alert-row">
+            <div class="alert-sev sev-{{ sa.severity or 'high' }}"></div>
+            <div class="alert-body">
+                <div class="alert-desc">{{ sa.description }}</div>
+                <div class="alert-meta">
+                    {{ sa.timestamp | ist_dt if sa.timestamp else '—' }}
+                    {% if sa.ip_address %} · IP: {{ sa.ip_address }}{% endif %}
+                </div>
+            </div>
+            <span class="alert-badge" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);">
+                {{ sa.alert_type or 'alert' }}
+            </span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty-state" style="padding:56px 24px;">
+            <div class="empty-state-title">No security events</div>
+            <div class="text-muted">No brute-force or anomaly events detected.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function showTab(name, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(name + 'Tab').classList.add('active');
+}
+</script>
+{% endblock %}

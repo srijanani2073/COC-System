@@ -1,0 +1,148 @@
+{% extends "layout.html" %}
+{% block title %}Crypto Pipeline — ECMS{% endblock %}
+{% block page_title %}Crypto Pipeline{% endblock %}
+{% block extra_styles %}
+.pipe-stage{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px 24px;position:relative;transition:all .2s;}
+.pipe-stage:hover{border-color:var(--accent);box-shadow:var(--sh);}
+.pipe-connector{display:flex;justify-content:center;align-items:center;height:32px;color:var(--text-3);font-size:20px;}
+.stage-num{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-family:var(--ff-m);font-weight:600;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
+.stage-title{font-family:var(--ff-d);font-size:15px;font-weight:600;margin-bottom:6px;}
+.stage-desc{font-size:13px;color:var(--text-2);margin-bottom:12px;}
+.stage-detail{font-family:var(--ff-m);font-size:11px;color:var(--text-3);background:var(--bg-2);border:1px solid var(--border);border-radius:5px;padding:8px 12px;line-height:1.7;}
+.demo-box{background:var(--bg-2);border:1px solid var(--border);border-radius:7px;padding:16px;}
+.demo-output{font-family:var(--ff-m);font-size:12px;color:var(--text-2);background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:12px;margin-top:10px;word-break:break-all;min-height:40px;line-height:1.6;}
+.demo-output.ok{color:var(--green);border-color:rgba(22,101,52,.2);background:var(--green-bg);}
+.demo-output.err{color:var(--red);border-color:rgba(153,27,27,.2);background:var(--red-bg);}
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Cryptographic Pipeline</div>
+        <div class="page-subtitle">AES-256-CBC · SHA-256 · RSA-2048-PKCS1</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div>
+        <div style="font-family:var(--ff-d);font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text-2);font-style:italic;">Upload Pipeline</div>
+        <div class="pipe-stage">
+            <div class="stage-num">1</div>
+            <div class="stage-title">File Received</div>
+            <div class="stage-desc">Raw file bytes read from upload stream.</div>
+            <div class="stage-detail">Input: multipart/form-data<br>Output: raw bytes (in-memory)</div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+            <div class="stage-num">2</div>
+            <div class="stage-title">SHA-256 Hash</div>
+            <div class="stage-desc">Compute cryptographic hash of raw file bytes. This is the integrity fingerprint.</div>
+            <div class="stage-detail">Algorithm: SHA-256<br>Library: hashlib (built-in)<br>Output: 64-char hex digest</div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+            <div class="stage-num">3</div>
+            <div class="stage-title">RSA-2048 Digital Signature</div>
+            <div class="stage-desc">Sign the hash with the system's private key to create a tamper-evident seal.</div>
+            <div class="stage-detail">Algorithm: RSA-2048, PKCS1v15<br>Key: 2048-bit, stored in /tmp/evidence_keys<br>Output: base64-encoded signature</div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+            <div class="stage-num">4</div>
+            <div class="stage-title">AES-256-CBC Encryption</div>
+            <div class="stage-desc">Encrypt the raw file with a random 256-bit key and 128-bit IV derived from the master secret.</div>
+            <div class="stage-detail">Algorithm: AES-256-CBC<br>Key: derived from MASTER_SECRET (env)<br>IV: random 16 bytes per file<br>Output: .enc file stored to Supabase</div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+            <div class="stage-num">5</div>
+            <div class="stage-title">Metadata Stored</div>
+            <div class="stage-desc">All metadata written across three databases simultaneously.</div>
+            <div class="stage-detail">PostgreSQL: evidence record, hash, signature<br>Neo4j: evidence node + case relationship<br>MongoDB: audit log, metadata document</div>
+        </div>
+    </div>
+
+    <div>
+        <div style="font-family:var(--ff-d);font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text-2);font-style:italic;">Verification Pipeline</div>
+        <div class="pipe-stage">
+            <div class="stage-num">1</div>
+            <div class="stage-title">Retrieve Encrypted File</div>
+            <div class="stage-desc">Fetch .enc file from Supabase storage using stored path.</div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+            <div class="stage-num">2</div>
+            <div class="stage-title">AES Decrypt</div>
+            <div class="stage-desc">Decrypt using stored key/IV to recover original bytes.</div>
+            <div class="stage-detail">Key + IV retrieved from PostgreSQL<br>Decrypts to original plaintext bytes</div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+            <div class="stage-num">3</div>
+            <div class="stage-title">Recompute SHA-256</div>
+            <div class="stage-desc">Hash the decrypted bytes and compare to stored hash.</div>
+            <div class="stage-detail">If hashes differ → file tampered<br>Hash mismatch = integrity failure</div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+            <div class="stage-num">4</div>
+            <div class="stage-title">Verify RSA Signature</div>
+            <div class="stage-desc">Verify the stored signature against the computed hash using the public key.</div>
+            <div class="stage-detail">Signature invalid → key mismatch or forgery<br>Uses system public key from /tmp/evidence_keys</div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage" style="border-color:var(--green);">
+            <div class="stage-num" style="background:var(--green);">✓</div>
+            <div class="stage-title">Integrity Verified</div>
+            <div class="stage-desc">Hash match + signature valid = evidence is authentic and unmodified.</div>
+        </div>
+    </div>
+</div>
+
+<hr class="divider">
+
+<div style="font-family:var(--ff-d);font-size:18px;font-weight:600;margin-bottom:20px;">Live Demo</div>
+<div class="grid-2">
+    <div class="demo-box">
+        <div style="font-weight:600;margin-bottom:12px;font-size:14px;">SHA-256 Hash</div>
+        <div class="form-group">
+            <label class="form-label">Input Text</label>
+            <input type="text" id="hashInput" class="form-control" placeholder="Type anything to hash…">
+        </div>
+        <button onclick="demoHash()" class="btn btn-secondary btn-sm">Compute Hash</button>
+        <div class="demo-output" id="hashOut">—</div>
+    </div>
+    <div class="demo-box">
+        <div style="font-weight:600;margin-bottom:12px;font-size:14px;">Verify Evidence Integrity</div>
+        <div class="form-group">
+            <label class="form-label">Evidence ID</label>
+            <input type="number" id="verifyId" class="form-control" placeholder="e.g. 42">
+        </div>
+        <button onclick="demoVerify()" class="btn btn-secondary btn-sm" id="verifyBtn">Run Verification</button>
+        <div class="demo-output" id="verifyOut">—</div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+async function demoHash(){
+    const txt=document.getElementById('hashInput').value;
+    if(!txt){document.getElementById('hashOut').textContent='—';return;}
+    const enc=new TextEncoder(),data=enc.encode(txt);
+    const buf=await crypto.subtle.digest('SHA-256',data);
+    const hex=Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const el=document.getElementById('hashOut');el.textContent=hex;el.className='demo-output ok';
+}
+async function demoVerify(){
+    const id=document.getElementById('verifyId').value;if(!id)return;
+    const btn=document.getElementById('verifyBtn');btn.textContent='Verifying…';btn.disabled=true;
+    const el=document.getElementById('verifyOut');
+    try{
+        const d=await fetch('/api/integrity/verify/'+id,{method:'POST'}).then(r=>r.json());
+        el.textContent=JSON.stringify(d,null,2);
+        el.className='demo-output '+(d.success&&d.integrity_verified!==false?'ok':'err');
+    }catch(e){el.textContent='Error: '+e.message;el.className='demo-output err';}
+    btn.textContent='Run Verification';btn.disabled=false;
+}
+document.getElementById('hashInput').addEventListener('input',demoHash);
+</script>
+{% endblock %}

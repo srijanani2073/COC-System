@@ -1,0 +1,340 @@
+{% extends "layout.html" %}
+{% block title %}Evidence — {{ case_number }} — ECMS{% endblock %}
+{% block page_title %}Evidence — {{ case_number }}{% endblock %}
+
+{% block extra_styles %}
+.seal-modal-overlay {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
+    z-index:500; align-items:center; justify-content:center;
+}
+.seal-modal-overlay.open { display:flex; }
+.seal-modal {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:8px; padding:24px; max-width:420px; width:calc(100% - 32px);
+    box-shadow:0 8px 32px rgba(0,0,0,.25);
+    animation: fadeUp .2s ease;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.type-tag {
+    display:inline-block; font-family:var(--mono); font-size:10px;
+    padding:2px 8px; border-radius:3px; letter-spacing:.5px;
+    background:var(--blue-bg); color:var(--blue); border:1px solid var(--blue-border);
+    text-transform:uppercase;
+}
+.inline-result {
+    display:none; font-size:11px; font-family:var(--mono);
+    padding:3px 8px; border-radius:3px; margin-left:6px;
+}
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-header-title">Evidence</div>
+        <div class="page-header-sub">{{ case_title }} · {{ evidence|length }} item{% if evidence|length != 1 %}s{% endif %}</div>
+    </div>
+    <div class="flex-row">
+        <a href="/cases" class="btn btn-secondary btn-sm">← Cases</a>
+        {% if role in ['Admin','Investigator','Forensic Analyst'] %}
+        <a href="/evidence/add?case_id={{ case_id }}" class="btn btn-primary">+ Upload Evidence</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Global result banner (shown after verify) -->
+<div id="globalResult" style="display:none;" class="info-box green mb-16"></div>
+
+<div class="card">
+    <div class="tbl-wrap">
+        <table class="tbl">
+            <thead>
+                <tr>
+                    <th>Tag / File</th>
+                    <th>Type</th>
+                    <th>Version</th>
+                    <th>SHA-256</th>
+                    <th>Status</th>
+                    <th>Uploaded</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in evidence %}
+                <tr id="row-{{ e.id }}">
+                    <td>
+                        <div style="font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ e.tag }}</div>
+                        <div class="mono">#{{ e.id }}{% if e.has_signature %} · <span style="color:var(--green);">RSA ✓</span>{% endif %}</div>
+                    </td>
+                    <td><span class="type-tag">{{ e.type }}</span></td>
+                    <td>
+                        <span class="mono-blue">v{{ e.version }}</span>
+                        {% if e.version_count > 1 %}
+                        <a href="/evidence/{{ e.id }}/versions" style="font-family:var(--mono);font-size:10px;color:var(--amber);margin-left:6px;text-decoration:none;">{{ e.version_count }}v</a>
+                        {% endif %}
+                    </td>
+                    <td><span class="mono">{{ e.hash }}…</span></td>
+                    <td id="status-{{ e.id }}">
+                        {% if e.is_sealed %}
+                        <span class="badge badge-sealed"><span class="badge-dot"></span>Sealed</span>
+                        {% else %}
+                        <span class="badge badge-open"><span class="badge-dot"></span>Active</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="mono">{{ e.uploaded_at | ist_date if e.uploaded_at else '—' }}</span></td>
+                    <td style="white-space:nowrap;">
+                        <a href="/custody?evidence_id={{ e.id }}" class="tbl-action">Custody</a>
+                        <span class="tbl-sep">·</span>
+                        <button onclick="verifyEvidence({{ e.id }}, this)"
+                                class="btn btn-success btn-sm"
+                                style="font-family:var(--mono);font-size:10px;padding:3px 9px;">Verify</button>
+                        <span class="tbl-sep">·</span>
+                        <a href="/evidence/{{ e.id }}/download"
+                           class="btn btn-blue btn-sm"
+                           id="dl-btn-{{ e.id }}"
+                           style="font-family:var(--mono);font-size:10px;padding:3px 9px;"
+                           title="Securely decrypt and download this evidence file"
+                           onclick="return confirmDownload(event, {{ e.id }}, '{{ e.tag|replace("'","\\'")|replace('"','&quot;') }}')">
+                            ↓ Download
+                        </a>
+
+                        {% if role in ['Admin','Investigator'] %}
+                        <span class="tbl-sep">·</span>
+                        {% if not e.is_sealed %}
+                        <button onclick="openSealModal({{ e.id }}, '{{ e.tag|replace("'","\\'")|replace('"','&quot;') }}')"
+                                class="btn btn-secondary btn-sm" style="font-size:10px;color:var(--amber);border-color:var(--amber-border);">
+                            Seal
+                        </button>
+                        {% else %}
+                        {% if role == 'Admin' %}
+                        <button onclick="openUnsealModal({{ e.id }})"
+                                class="btn btn-secondary btn-sm" style="font-size:10px;">
+                            Unseal
+                        </button>
+                        {% else %}
+                        <span class="mono" style="font-size:10px;color:var(--accent);">Sealed</span>
+                        {% endif %}
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7">
+                    <div class="empty-state">
+                        <div class="empty-state-title">No evidence uploaded yet</div>
+                        {% if role in ['Admin','Investigator','Forensic Analyst'] %}
+                        <a href="/evidence/add?case_id={{ case_id }}" class="tbl-action" style="font-size:13px;">Upload the first item →</a>
+                        {% endif %}
+                    </div>
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Seal Modal -->
+<div class="seal-modal-overlay" id="sealModal">
+    <div class="seal-modal">
+        <div style="font-family:var(--serif);font-size:17px;font-weight:600;margin-bottom:4px;">Seal Evidence</div>
+        <div class="mono" style="margin-bottom:16px;font-size:11px;" id="sealModalTag"></div>
+        <div class="info-box amber mb-16" style="font-size:12px;">
+            Sealing blocks all custody transfers until an Admin unseals it.
+            This action is logged to audit trail.
+        </div>
+        <div class="form-group">
+            <label class="form-label">Reason for Sealing</label>
+            <textarea id="sealReasonInput" class="form-control" rows="3"
+                      placeholder="State reason this evidence must be sealed…"></textarea>
+        </div>
+        <div id="sealError" style="display:none;" class="info-box accent mb-16" style="font-size:12px;"></div>
+        <div class="flex-row">
+            <button id="sealConfirmBtn" onclick="confirmSeal()" class="btn btn-danger">Confirm Seal</button>
+            <button onclick="closeSealModal()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Unseal Modal -->
+<div class="seal-modal-overlay" id="unsealModal">
+    <div class="seal-modal">
+        <div style="font-family:var(--serif);font-size:17px;font-weight:600;margin-bottom:16px;">Unseal Evidence</div>
+        <div class="info-box accent mb-16" style="font-size:12px;">
+            Admin action — custody transfers will resume. All unseal events are logged.
+        </div>
+        <div class="form-group">
+            <label class="form-label">Reason for Unsealing</label>
+            <textarea id="unsealReasonInput" class="form-control" rows="2"
+                      placeholder="Optional reason…"></textarea>
+        </div>
+        <div id="unsealError" style="display:none;" class="info-box accent mb-16" style="font-size:12px;"></div>
+        <div class="flex-row">
+            <button id="unsealConfirmBtn" onclick="confirmUnseal()" class="btn btn-primary">Confirm Unseal</button>
+            <button onclick="document.getElementById('unsealModal').classList.remove('open')" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CASE_ID = {{ case_id }};
+let sealTargetId = null;
+let unsealTargetId = null;
+
+// ── Seal ──────────────────────────────────────────────────────────────────
+function openSealModal(id, tag) {
+    sealTargetId = id;
+    document.getElementById('sealModalTag').textContent = tag;
+    document.getElementById('sealReasonInput').value = '';
+    document.getElementById('sealError').style.display = 'none';
+    document.getElementById('sealModal').classList.add('open');
+}
+function closeSealModal() {
+    document.getElementById('sealModal').classList.remove('open');
+}
+
+async function confirmSeal() {
+    const reason = document.getElementById('sealReasonInput').value.trim();
+    if (!reason) {
+        showModalError('sealError', 'Please enter a reason for sealing.');
+        return;
+    }
+    const btn = document.getElementById('sealConfirmBtn');
+    btn.innerHTML = '<span class="spinner" style="width:11px;height:11px;border-width:2px;"></span> Sealing…';
+    btn.disabled = true;
+
+    try {
+        const r = await fetch(`/evidence/${sealTargetId}/seal`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seal_reason: reason, case_id: CASE_ID })
+        });
+        const data = await r.json();
+        if (data.success) {
+            closeSealModal();
+            showGlobalResult('success', `🔒 Evidence ${data.evidence_code} sealed. Custody transfers are blocked.`);
+            // Reload page after short delay so changes are reflected
+            setTimeout(() => location.reload(), 1800);
+        } else {
+            showModalError('sealError', data.message || 'Seal failed.');
+            btn.innerHTML = 'Confirm Seal';
+            btn.disabled = false;
+        }
+    } catch(e) {
+        showModalError('sealError', 'Request failed — check server connection.');
+        btn.innerHTML = 'Confirm Seal';
+        btn.disabled = false;
+    }
+}
+
+// ── Unseal ────────────────────────────────────────────────────────────────
+function openUnsealModal(id) {
+    unsealTargetId = id;
+    document.getElementById('unsealReasonInput').value = '';
+    document.getElementById('unsealError').style.display = 'none';
+    document.getElementById('unsealModal').classList.add('open');
+}
+
+async function confirmUnseal() {
+    const reason = document.getElementById('unsealReasonInput').value.trim();
+    const btn = document.getElementById('unsealConfirmBtn');
+    btn.innerHTML = '<span class="spinner" style="width:11px;height:11px;border-width:2px;"></span> Unsealing…';
+    btn.disabled = true;
+
+    try {
+        const r = await fetch(`/evidence/${unsealTargetId}/unseal`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ unseal_reason: reason })
+        });
+        const data = await r.json();
+        if (data.success) {
+            document.getElementById('unsealModal').classList.remove('open');
+            showGlobalResult('success', `✓ Evidence ${data.evidence_code} unsealed. Custody transfers are now permitted.`);
+            setTimeout(() => location.reload(), 1800);
+        } else {
+            showModalError('unsealError', data.message || 'Unseal failed.');
+            btn.innerHTML = 'Confirm Unseal';
+            btn.disabled = false;
+        }
+    } catch(e) {
+        showModalError('unsealError', 'Request failed — check server connection.');
+        btn.innerHTML = 'Confirm Unseal';
+        btn.disabled = false;
+    }
+}
+
+// ── Verify ────────────────────────────────────────────────────────────────
+async function verifyEvidence(id, btn) {
+    const orig = btn.textContent;
+    btn.innerHTML = '<span class="spinner" style="width:10px;height:10px;border-width:2px;"></span>';
+    btn.disabled = true;
+    try {
+        const r = await fetch(`/evidence/${id}/verify`, { method: 'POST' });
+        const data = await r.json();
+        if (data.success) {
+            showGlobalResult('success', `✓ Evidence #${id} verified — hash matches${data.signature_present ? ', RSA ✓' : ''}. ${new Date(data.verified_at).toLocaleString()}`);
+        } else {
+            showGlobalResult('error', `✕ Verification failed for #${id}: ${data.message}`);
+        }
+    } catch(e) {
+        showGlobalResult('error', `✕ Verify request failed for #${id}`);
+    }
+    btn.textContent = orig;
+    btn.disabled = false;
+}
+
+// ── Secure Download ───────────────────────────────────────────────────────
+// Adds a brief confirmation step so accidental clicks don't trigger a
+// download. The actual fetch + decrypt happens server-side; we just
+// navigate to the route. A feedback message shows on return.
+function confirmDownload(event, id, tag) {
+    const label = tag.length > 40 ? tag.slice(0, 40) + '…' : tag;
+    const ok = confirm(
+        `Download evidence:\n"${label}"\n\n` +
+        `This will be decrypted server-side and streamed directly to you.\n` +
+        `The download is logged to the audit trail.\n\nProceed?`
+    );
+    if (!ok) {
+        event.preventDefault();
+        return false;
+    }
+    // Show loading state on the button
+    const btn = document.getElementById(`dl-btn-${id}`);
+    if (btn) {
+        btn.textContent = '⟳ Preparing…';
+        btn.style.pointerEvents = 'none';
+        btn.style.opacity = '0.6';
+        // Reset after a few seconds in case the download triggers immediately
+        setTimeout(() => {
+            btn.textContent = '↓ Download';
+            btn.style.pointerEvents = '';
+            btn.style.opacity = '';
+        }, 4000);
+    }
+    return true;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function showGlobalResult(type, msg) {
+    const box = document.getElementById('globalResult');
+    box.style.display = 'block';
+    box.className = `info-box ${type === 'success' ? 'green' : 'accent'} mb-16`;
+    box.textContent = msg;
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function showModalError(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.style.display = 'block';
+}
+
+// Close modals on overlay click
+document.getElementById('sealModal').addEventListener('click', function(e) {
+    if (e.target === this) closeSealModal();
+});
+document.getElementById('unsealModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+});
+</script>
+{% endblock %}

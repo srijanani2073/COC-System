@@ -1,0 +1,116 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard — ECMS{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block extra_styles %}
+.welcome{font-family:var(--ff-d);font-size:15px;color:var(--text-2);margin-bottom:24px;font-style:italic;}
+.activity-list{display:flex;flex-direction:column;gap:0;}
+.activity-item{display:flex;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);}
+.activity-item:last-child{border-bottom:none;}
+.activity-time{font-family:var(--ff-m);font-size:11px;color:var(--text-3);white-space:nowrap;padding-top:2px;width:110px;flex-shrink:0;}
+.activity-body{flex:1;}
+.activity-type{font-size:10px;font-family:var(--ff-m);letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px;}
+.activity-desc{font-size:13px;color:var(--text-2);}
+.evt-evidence_uploaded,.evt-evidence_version_uploaded{color:var(--accent-2);}
+.evt-case_created,.evt-case_updated{color:var(--accent);}
+.evt-custody_transferred{color:var(--amber);}
+.evt-evidence_verified{color:var(--green);}
+.quick-actions{display:flex;flex-direction:column;gap:8px;}
+.qa-link{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--border);border-radius:6px;text-decoration:none;color:var(--text);font-size:13.5px;transition:all .2s;background:var(--bg);}
+.qa-link:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-bg);}
+.qa-arrow{color:var(--text-3);font-size:12px;}
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Good {% if h %}afternoon{% else %}morning{% endif %}, {{ user.split(" ")[0] }}</div>
+        <div class="welcome">Here is what is happening in the system today.</div>
+    </div>
+    <div class="page-actions">
+        <a href="/evidence/add" class="btn btn-primary btn-sm">+ Upload Evidence</a>
+        <a href="/cases/add" class="btn btn-secondary btn-sm">+ New Case</a>
+    </div>
+</div>
+
+<div class="kpi-grid">
+    <div class="kpi-card k-blue">
+        <div class="kpi-label">Total Cases</div>
+        <div class="kpi-value" data-count="{{ total_cases }}">0</div>
+        <div class="kpi-sub">all time</div>
+        <a href="/cases" class="kpi-link">Browse cases</a>
+    </div>
+    <div class="kpi-card k-green">
+        <div class="kpi-label">Open Cases</div>
+        <div class="kpi-value" data-count="{{ open_cases }}">0</div>
+        <div class="kpi-sub">active investigations</div>
+        <a href="/cases/add" class="kpi-link">New case</a>
+    </div>
+    <div class="kpi-card k-red">
+        <div class="kpi-label">Evidence Items</div>
+        <div class="kpi-value" data-count="{{ total_evidence }}">0</div>
+        <div class="kpi-sub">registered</div>
+        <a href="/evidence/add" class="kpi-link">Upload</a>
+    </div>
+    {% if alerts_count is defined %}
+    <div class="kpi-card {% if alerts_count > 0 %}k-amber{% else %}k-green{% endif %}">
+        <div class="kpi-label">Active Alerts</div>
+        <div class="kpi-value" data-count="{{ alerts_count }}">0</div>
+        <div class="kpi-sub">requiring attention</div>
+        {% if role in ["Admin","Investigator"] %}<a href="/alerts" class="kpi-link">Review</a>{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Quick Actions</div>
+        </div>
+        <div class="card-body">
+            <div class="quick-actions">
+                <a href="/cases" class="qa-link"><span>Browse Cases</span><span class="qa-arrow">→</span></a>
+                <a href="/evidence/add" class="qa-link"><span>Upload Evidence</span><span class="qa-arrow">→</span></a>
+                <a href="/custody" class="qa-link"><span>Chain of Custody</span><span class="qa-arrow">→</span></a>
+                <a href="/timeline" class="qa-link"><span>Timeline</span><span class="qa-arrow">→</span></a>
+                {% if role in ["Admin","Investigator"] %}
+                <a href="/analytics-dashboard" class="qa-link"><span>Analytics</span><span class="qa-arrow">→</span></a>
+                <a href="/integrity-dashboard" class="qa-link"><span>Integrity Verification</span><span class="qa-arrow">→</span></a>
+                <a href="/crypto-pipeline" class="qa-link"><span>Crypto Pipeline</span><span class="qa-arrow">→</span></a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Recent Activity</div>
+            <span class="card-meta">{% if role in ["Admin","Investigator"] %}all users{% else %}your activity{% endif %}</span>
+        </div>
+        <div class="card-body" style="padding:0 20px;">
+            {% if recent_activity %}
+            <div class="activity-list">
+                {% for ev in recent_activity %}
+                <div class="activity-item">
+                    <div class="activity-time">{{ ev.timestamp | ist_dt("%d %b, %H:%M") if ev.timestamp else "—" }}</div>
+                    <div class="activity-body">
+                        <div class="activity-type evt-{{ ev.event_type }}">{{ ev.event_type|replace("_"," ") }}</div>
+                        <div class="activity-desc">{{ ev.description }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted" style="padding:20px 0;">No recent activity.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+document.querySelectorAll(".kpi-value[data-count]").forEach(el=>{
+    const target=parseInt(el.dataset.count)||0;
+    let v=0;const step=Math.max(1,Math.floor(target/40));
+    const iv=setInterval(()=>{v=Math.min(v+step,target);el.textContent=v;if(v>=target)clearInterval(iv);},30);
+});
+</script>
+{% endblock %}

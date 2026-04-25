@@ -1,0 +1,262 @@
+{% extends "layout.html" %}
+{% block title %}Reports — ECMS{% endblock %}
+{% block page_title %}Reports{% endblock %}
+
+{% block extra_styles %}
+.rep-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:24px;flex-wrap:wrap;}
+.rep-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.rep-stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;}
+.rep-stat-num{font-family:var(--ff-d);font-size:22px;font-weight:600;color:var(--accent);}
+.rep-stat-lbl{font-size:10px;font-family:var(--ff-m);color:var(--text-3);margin-top:2px;}
+.rep-stat-src{font-size:9px;font-family:var(--ff-m);color:var(--text-3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);}
+.db-badge{font-size:9px;font-family:var(--ff-m);padding:2px 8px;border-radius:12px;font-weight:500;}
+.badge-sql{background:rgba(44,74,110,.12);color:#2c4a6e;}
+.badge-neo{background:rgba(22,101,52,.12);color:#166534;}
+.badge-mongo{background:rgba(146,64,14,.12);color:#92400e;}
+.log-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;}
+.log-item:last-child{border-bottom:none;}
+.log-item-head{display:flex;align-items:center;gap:10px;margin-bottom:2px;}
+.log-ts{font-family:var(--ff-m);font-size:10px;color:var(--text-3);white-space:nowrap;flex-shrink:0;}
+.log-ev{font-family:var(--ff-m);font-size:10px;color:var(--accent-2);background:var(--accent-bg-2);border-radius:3px;padding:1px 6px;white-space:nowrap;}
+.log-desc-text{font-size:12px;color:var(--text-2);padding-left:2px;}
+.chain-row{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--border);}
+.chain-row:last-child{border-bottom:none;}
+.chain-num{width:24px;height:24px;border-radius:50%;background:var(--bg-3);color:var(--text-2);font-size:10px;font-family:var(--ff-m);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+.chain-detail{flex:1;font-size:12px;}
+.chain-action{font-weight:500;font-family:var(--ff-m);font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text);}
+.chain-sub{color:var(--text-3);margin-top:2px;font-size:11px;}
+.anomaly-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:10px;font-family:var(--ff-m);}
+.anomaly-high{background:rgba(153,27,27,.1);color:var(--red);}
+.anomaly-med{background:rgba(146,64,14,.1);color:var(--amber);}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+.info-cell{padding:8px 14px;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:10px;}
+.info-cell:nth-child(odd){border-right:1px solid var(--border);}
+.info-key{font-family:var(--ff-m);font-size:10px;color:var(--text-3);width:100px;flex-shrink:0;padding-top:1px;}
+.no-report{padding:60px;text-align:center;color:var(--text-3);font-family:var(--ff-m);font-size:12px;}
+{% endblock %}
+
+{% block content %}
+<div class="rep-header">
+  <div>
+    <div style="font-family:var(--ff-d);font-size:20px;font-weight:600;">Case Reports</div>
+    <div style="font-size:12px;color:var(--text-3);font-family:var(--ff-m);margin-top:2px;">Multi-database evidence and custody summary</div>
+  </div>
+</div>
+
+<div class="card mb-16" style="max-width:520px;">
+  <div class="card-body">
+    <form method="get" style="display:flex;gap:10px;align-items:flex-end;">
+      <div style="flex:1;">
+        <label class="form-label">Select Case</label>
+        <select name="case_id" class="form-control" required>
+          <option value="">— Choose a case —</option>
+          {% for c in cases %}
+          <option value="{{ c.id }}" {% if report and report.case.id == c.id %}selected{% endif %}>
+            {{ c.case_number }} — {{ c.title }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">Generate</button>
+    </form>
+  </div>
+</div>
+
+{% if not report %}
+<div class="card">
+  <div class="no-report">
+    ↑ Select a case to generate a full multi-database report.<br><br>
+    Pulls data simultaneously from PostgreSQL, Neo4j, and MongoDB.
+  </div>
+</div>
+
+{% else %}
+{% set c = report.case %}
+
+<!-- Case header -->
+<div class="card mb-16">
+  <div class="card-header">
+    <span class="card-title">{{ c.number }} — {{ c.title }}</span>
+    <span class="mono" style="font-size:10px;color:var(--text-3);">Generated {{ generated_at | ist_full }}</span>
+  </div>
+  <div class="info-grid">
+    <div class="info-cell"><span class="info-key">Status</span>
+      <span>
+        {% if c.status == 'open' %}<span class="badge badge-open"><span class="badge-dot"></span>Open</span>
+        {% elif c.status == 'closed' %}<span class="badge badge-closed"><span class="badge-dot"></span>Closed</span>
+        {% else %}<span class="badge badge-archived"><span class="badge-dot"></span>Archived</span>{% endif %}
+      </span>
+    </div>
+    <div class="info-cell"><span class="info-key">Created By</span><span>{{ c.created_by }}</span></div>
+    <div class="info-cell"><span class="info-key">Created At</span><span class="mono">{{ c.created_at | ist_dt if c.created_at else '—' }}</span></div>
+    <div class="info-cell"><span class="info-key">Ref.</span><span class="mono">{{ c.number }}</span></div>
+    {% if c.description %}
+    <div class="info-cell" style="grid-column:1/-1;border-right:none;">
+      <span class="info-key">Description</span><span style="color:var(--text-2);">{{ c.description }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Multi-DB stat grid -->
+<div class="rep-stat-grid">
+  <div class="rep-stat">
+    <div class="rep-stat-num">{{ report.evidence|length }}</div>
+    <div class="rep-stat-lbl">Evidence Items</div>
+    <div class="rep-stat-src">PostgreSQL · evidence</div>
+  </div>
+  <div class="rep-stat">
+    <div class="rep-stat-num">{{ report.custody_summary | sum(attribute='custody_events') }}</div>
+    <div class="rep-stat-lbl">Custody Events</div>
+    <div class="rep-stat-src">PostgreSQL · coc_logs</div>
+  </div>
+  <div class="rep-stat">
+    <div class="rep-stat-num">{{ report.neo_stats.total_chain_events or 0 }}</div>
+    <div class="rep-stat-lbl">Graph Chain Events</div>
+    <div class="rep-stat-src">Neo4j · CustodyEvent nodes</div>
+  </div>
+  <div class="rep-stat">
+    <div class="rep-stat-num">{{ report.mongo_stats.total_logs or 0 }}</div>
+    <div class="rep-stat-lbl">Activity Logs</div>
+    <div class="rep-stat-src">MongoDB · case_activity_logs</div>
+  </div>
+</div>
+
+<!-- Evidence Inventory (PostgreSQL) -->
+<div class="card mb-16">
+  <div class="card-header">
+    <span class="card-title">Evidence Inventory</span>
+    <span class="db-badge badge-sql">PostgreSQL</span>
+    <span class="mono" style="font-size:10px;color:var(--text-3);">{{ report.evidence|length }} items</span>
+  </div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Code</th><th>Type</th><th>Tag</th><th>SHA-256</th>
+          <th>Size</th><th>Custody</th><th>Verified</th><th>Uploaded</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ev in report.evidence %}
+        {% set cs = report.custody_summary | selectattr('evidence_code','equalto',ev.code) | first | default(None) %}
+        <tr>
+          <td><span class="mono-blue">{{ ev.code }}</span></td>
+          <td><span style="font-family:var(--mono);font-size:10px;text-transform:uppercase;">{{ ev.type }}</span></td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ ev.tag }}</td>
+          <td><span class="mono" style="font-size:10px;">{{ ev.hash }}…</span></td>
+          <td><span class="mono">{{ ev.size_kb or '—' }}</span></td>
+          <td><span class="mono-blue">{{ cs.custody_events if cs else 0 }}</span></td>
+          <td>
+            {% if ev.last_verified %}
+            <span style="color:var(--green);font-size:12px;">✓</span>
+            {% else %}
+            <span style="color:var(--text-3);font-size:12px;">—</span>
+            {% endif %}
+          </td>
+          <td><span class="mono" style="font-size:11px;">{{ ev.uploaded | ist_date if ev.uploaded else '—' }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8"><div class="empty-state">No evidence for this case.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Neo4j Chain Analysis -->
+<div class="card mb-16">
+  <div class="card-header">
+    <span class="card-title">Custody Chain Analysis</span>
+    <span class="db-badge badge-neo">Neo4j</span>
+  </div>
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+      <div style="text-align:center;padding:12px;background:var(--bg-2);border-radius:6px;">
+        <div style="font-family:var(--ff-d);font-size:20px;font-weight:600;color:var(--accent);">{{ report.neo_stats.total_chain_events or 0 }}</div>
+        <div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);">Graph Events (Neo4j)</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg-2);border-radius:6px;">
+        <div style="font-family:var(--ff-d);font-size:20px;font-weight:600;color:{{ 'var(--red)' if report.neo_stats.total_anomalies else 'var(--green)' }};">{{ report.neo_stats.total_anomalies or 0 }}</div>
+        <div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);">Anomalies Detected</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg-2);border-radius:6px;">
+        <div style="font-family:var(--ff-d);font-size:20px;font-weight:600;color:var(--accent-2);">{{ report.neo_stats.max_chain or 0 }}</div>
+        <div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);">Max Chain Depth</div>
+      </div>
+    </div>
+    {% if report.neo_stats.anomalies %}
+    <div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;">Detected Anomalies</div>
+    {% for a in report.neo_stats.anomalies %}
+    <div style="padding:8px 12px;margin-bottom:6px;border-radius:6px;background:{{ 'rgba(153,27,27,.07)' if a.severity=='high' else 'rgba(146,64,14,.07)' }};border-left:3px solid {{ 'var(--red)' if a.severity=='high' else 'var(--amber)' }};">
+      <span class="anomaly-tag {{ 'anomaly-high' if a.severity=='high' else 'anomaly-med' }}">{{ a.severity }}</span>
+      <span style="font-size:12px;margin-left:6px;font-weight:500;">{{ a.type }}</span>
+      <div style="font-size:11px;color:var(--text-3);margin-top:2px;">{{ a.description }}</div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="info-box ok"><span>✓</span><span>No custody chain anomalies detected across all evidence in Neo4j.</span></div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- MongoDB Activity Log -->
+<div class="card mb-16">
+  <div class="card-header">
+    <span class="card-title">Activity Log</span>
+    <span class="db-badge badge-mongo">MongoDB</span>
+    <span class="mono" style="font-size:10px;color:var(--text-3);">{{ report.mongo_stats.total_logs or 0 }} total · showing {{ report.timeline|length }}</span>
+  </div>
+  <div class="card-body" style="padding:6px 16px;">
+    {% if report.timeline %}
+    {% for ev in report.timeline %}
+    <div class="log-item">
+      <div class="log-item-head">
+        <span class="log-ts">{{ ev.timestamp | ist_dt if ev.timestamp else '—' }}</span>
+        <span class="log-ev">{{ (ev.event_type or '—') | replace('_',' ') }}</span>
+      </div>
+      <div class="log-desc-text">{{ ev.description or '' }}</div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="padding:20px;text-align:center;color:var(--text-3);font-size:12px;font-family:var(--ff-m);">No activity logs for this case.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Per-evidence custody breakdown -->
+{% if report.custody_chains %}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Per-Evidence Custody Breakdown</span>
+    <span class="db-badge badge-sql">PostgreSQL</span>
+  </div>
+  <div class="card-body" style="padding:0;">
+    {% for item in report.custody_chains %}
+    <div style="border-bottom:1px solid var(--border);padding:12px 16px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <span class="mono-blue" style="font-size:12px;">{{ item.evidence_code }}</span>
+        <span style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);">{{ item.events|length }} events</span>
+        {% if item.anomaly_count %}<span class="anomaly-tag anomaly-high">{{ item.anomaly_count }} anomalies</span>{% endif %}
+      </div>
+      {% for ev in item.events[:5] %}
+      <div class="chain-row">
+        <div class="chain-num">{{ loop.index }}</div>
+        <div class="chain-detail">
+          <div class="chain-action">{{ ev.action or 'transfer' }}</div>
+          <div class="chain-sub">{{ ev.from_user or '—' }} → {{ ev.to_user or '—' }}{% if ev.location %} · {{ ev.location }}{% endif %}</div>
+          <div class="chain-sub"><span class="mono">{{ ev.timestamp | ist_dt if ev.timestamp else '—' }}</span></div>
+        </div>
+      </div>
+      {% endfor %}
+      {% if item.events|length > 5 %}
+      <div style="font-size:11px;font-family:var(--ff-m);color:var(--text-3);padding:4px 0 0 36px;">+ {{ item.events|length - 5 }} more events</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

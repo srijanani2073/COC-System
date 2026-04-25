@@ -1,0 +1,128 @@
+{% extends "layout.html" %}
+{% block title %}Upload Evidence — ECMS{% endblock %}
+{% block page_title %}Upload Evidence{% endblock %}
+{% block extra_styles %}
+.upload-zone{border:2px dashed var(--border-2);border-radius:8px;padding:40px 24px;text-align:center;cursor:pointer;transition:all .25s;background:var(--bg);position:relative;}
+.upload-zone:hover,.upload-zone.over{border-color:var(--accent);background:var(--accent-bg);}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-title{font-family:var(--ff-d);font-size:16px;margin-bottom:6px;color:var(--text);}
+.upload-sub{font-size:12px;font-family:var(--ff-m);color:var(--text-3);}
+.file-preview{background:var(--green-bg);border:1px solid rgba(22,101,52,.2);border-radius:7px;padding:12px 16px;display:flex;align-items:center;gap:14px;margin-top:14px;}
+.file-name{font-size:13px;font-weight:500;word-break:break-all;}
+.file-meta{font-size:11px;font-family:var(--ff-m);color:var(--text-3);margin-top:3px;}
+.crypto-note{background:var(--bg-2);border:1px solid var(--border);border-radius:7px;padding:14px 16px;font-size:12px;font-family:var(--ff-m);color:var(--text-3);margin-top:16px;line-height:1.7;}
+.crypto-step{display:flex;gap:8px;align-items:center;margin-bottom:4px;}
+.step-num{width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Upload Evidence</div>
+        <div class="page-subtitle">AES-256-CBC encrypted, SHA-256 hashed, RSA-2048 signed</div>
+    </div>
+</div>
+<div style="max-width:680px;">
+    <form method="POST" action="/evidence/add" enctype="multipart/form-data" id="evForm">
+        <div class="card mb-20">
+            <div class="card-header"><div class="card-title">Case & Metadata</div></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label class="form-label">Case</label>
+                    <select name="case_id" class="form-control" required id="caseSelect">
+                        <option value="">Select a case…</option>
+                        {% for c in cases %}<option value="{{ c.id }}" data-status="{{ c.status }}" {% if preselected_case_id == c.id %}selected{% endif %}>{{ c.case_number }} — {{ c.title }}{% if c.status in ('closed','archived') %} [{{ c.status|upper }}]{% endif %}</option>{% endfor %}
+                    </select>
+                    <div id="caseStatusWarn" style="display:none;margin-top:6px;padding:8px 12px;border-radius:4px;font-size:12px;font-family:var(--ff-m);"></div>
+                </div>
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Type</label>
+                        <select name="evidence_type" class="form-control" required>
+                            <option value="">Select…</option>
+                            <option value="digital">Digital (file, image, log, dump…)</option>
+                            <option value="physical">Physical (device, printout, hardware…)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Source / Origin</label>
+                        <input type="text" name="source" class="form-control" placeholder="Device, email, etc.">
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Description</label>
+                    <input type="text" name="description" class="form-control" placeholder="Brief identifier for this item">
+                </div>
+            </div>
+        </div>
+        <div class="card mb-20">
+            <div class="card-header"><div class="card-title">File</div><span class="card-meta">SHA-256 computed automatically</span></div>
+            <div class="card-body">
+                <div class="upload-zone" id="dropZone">
+                    <input type="file" name="file" id="fileIn" required>
+                    <div class="upload-title">Drop file here or click to browse</div>
+                    <div class="upload-sub">Any file type</div>
+                </div>
+                <div class="file-preview" id="filePrev" style="display:none;">
+                    <div style="flex:1;">
+                        <div class="file-name" id="fName"></div>
+                        <div class="file-meta" id="fMeta"></div>
+                    </div>
+                    <button type="button" onclick="clearFile()" class="btn btn-danger btn-xs">Remove</button>
+                </div>
+                <div class="crypto-note">
+                    <div class="crypto-step"><div class="step-num">1</div> File → SHA-256 hash computed</div>
+                    <div class="crypto-step"><div class="step-num">2</div> Hash → RSA-2048 digital signature</div>
+                    <div class="crypto-step"><div class="step-num">3</div> File → AES-256-CBC encrypted, stored to Supabase</div>
+                </div>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;">
+            <button type="submit" class="btn btn-primary" id="subBtn">Upload & Register</button>
+            <a href="/cases" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+const zone=document.getElementById('dropZone'),fi=document.getElementById('fileIn');
+function showFile(f){document.getElementById('fName').textContent=f.name;document.getElementById('fMeta').textContent=(f.size/1024).toFixed(1)+' KB — '+f.type;document.getElementById('filePrev').style.display='flex';}
+function clearFile(){fi.value='';document.getElementById('filePrev').style.display='none';}
+fi.addEventListener('change',()=>{if(fi.files[0])showFile(fi.files[0]);});
+
+const caseSelect = document.getElementById('caseSelect');
+const caseWarn   = document.getElementById('caseStatusWarn');
+const subBtn     = document.getElementById('subBtn');
+function checkCaseStatus() {
+  const opt = caseSelect.options[caseSelect.selectedIndex];
+  const status = opt ? opt.getAttribute('data-status') : '';
+  if (status === 'closed') {
+    caseWarn.style.display = 'block';
+    caseWarn.style.background = 'rgba(220,38,38,0.1)';
+    caseWarn.style.color = '#ef4444';
+    caseWarn.style.border = '1px solid rgba(220,38,38,0.3)';
+    caseWarn.textContent = '⚠ This case is CLOSED. Evidence cannot be added. All evidence is sealed.';
+    subBtn.disabled = true;
+    subBtn.style.opacity = '0.4';
+  } else if (status === 'archived') {
+    caseWarn.style.display = 'block';
+    caseWarn.style.background = 'rgba(234,179,8,0.1)';
+    caseWarn.style.color = '#eab308';
+    caseWarn.style.border = '1px solid rgba(234,179,8,0.3)';
+    caseWarn.textContent = '⚠ This case is ARCHIVED. Evidence cannot be added.';
+    subBtn.disabled = true;
+    subBtn.style.opacity = '0.4';
+  } else {
+    caseWarn.style.display = 'none';
+    subBtn.disabled = false;
+    subBtn.style.opacity = '';
+  }
+}
+caseSelect.addEventListener('change', checkCaseStatus);
+checkCaseStatus();
+zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('over');});
+zone.addEventListener('dragleave',()=>zone.classList.remove('over'));
+zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('over');if(e.dataTransfer.files[0]){const dt=new DataTransfer();dt.items.add(e.dataTransfer.files[0]);fi.files=dt.files;showFile(e.dataTransfer.files[0]);}});
+document.getElementById('evForm').addEventListener('submit',()=>{const b=document.getElementById('subBtn');b.textContent='Uploading…';b.disabled=true;});
+</script>
+{% endblock %}

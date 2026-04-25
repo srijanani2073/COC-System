@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{% block title %}Versions — ECMS{% endblock %}
+{% block page_title %}Version History{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Version History</div>
+        <div class="page-subtitle">{{ filename }}</div>
+    </div>
+</div>
+<div style="max-width:860px;">
+    <div class="card">
+        <div class="card-header"><div class="card-title">{{ filename }}</div><span class="badge badge-blue">{{ versions|length }} versions</span></div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead><tr><th>Version</th><th>Code</th><th>Hash (preview)</th><th>Size</th><th>Uploaded By</th><th>Date</th></tr></thead>
+                <tbody>
+                {% for v in versions %}
+                <tr>
+                    <td><span class="mono-accent">v{{ v.version }}</span>{% if loop.last %} <span style="font-size:10px;font-family:var(--ff-m);color:var(--green);margin-left:6px;">LATEST</span>{% endif %}</td>
+                    <td><span class="mono">{{ v.code }}</span></td>
+                    <td><span class="mono">{{ v.hash }}…</span></td>
+                    <td><span class="mono">{{ ((v.size or 0)/1024)|round(1) }} KB</span></td>
+                    <td>{{ v.uploader_name }}</td>
+                    <td><span class="mono">{{ v.uploaded_at | ist_date if v.uploaded_at else "—" }}</span></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="mt-16"><a href="/evidence?case_id={{ case_id }}" class="btn btn-secondary">← Back to Evidence</a></div>
+</div>
+{% endblock %}

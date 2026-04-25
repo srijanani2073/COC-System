@@ -1,0 +1,58 @@
+{% extends "layout.html" %}
+{% block title %}Users — ECMS{% endblock %}
+{% block page_title %}Users{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-header-title">Users</div>
+        <div class="page-header-sub">{{ users|length }} active user{% if users|length != 1 %}s{% endif %} in system</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="tbl-wrap">
+        <table class="tbl">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Cases</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="width:28px;height:28px;border-radius:5px;background:var(--blue);
+                                        display:flex;align-items:center;justify-content:center;
+                                        font-size:11px;font-weight:600;color:#fff;flex-shrink:0;">
+                                {{ u.name[0]|upper if u.name else '?' }}
+                            </div>
+                            <div>
+                                <div style="font-weight:500;">{{ u.name }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        {% if u.role == 'Admin' %}
+                            <span class="badge badge-accent"><span class="badge-dot"></span>Admin</span>
+                        {% elif u.role == 'Investigator' %}
+                            <span class="badge badge-blue"><span class="badge-dot"></span>Investigator</span>
+                        {% elif u.role == 'Forensic Analyst' %}
+                            <span class="badge badge-green"><span class="badge-dot"></span>Forensic Analyst</span>
+                        {% else %}
+                            <span class="badge badge-pending"><span class="badge-dot"></span>{{ u.role }}</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="mono-blue">{{ u.case_count }}</span></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3"><div class="empty-state">No users found.</div></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "layout.html" %}
+{% block title %}Cases — ECMS{% endblock %}
+{% block page_title %}Cases{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Cases</div>
+        <div class="page-subtitle">{{ cases|length }} record{% if cases|length != 1 %}s{% endif %}</div>
+    </div>
+    <div class="page-actions">
+        <form method="get" style="display:flex;gap:8px;align-items:center;">
+            <div class="search-wrap">
+                <span class="search-icon">⌕</span>
+                <input type="text" name="q" placeholder="Search cases…" value="{{ query }}">
+            </div>
+            {% if query %}<a href="/cases" class="btn btn-secondary btn-sm">Clear</a>{% endif %}
+        </form>
+        {% if role in ["Admin","Investigator"] %}<a href="/cases/add" class="btn btn-primary">+ New Case</a>{% endif %}
+    </div>
+</div>
+<div class="card">
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Case No.</th><th>Title</th><th>Status</th><th>Evidence</th><th>Last Updated</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for c in cases %}
+            <tr>
+                <td><span class="mono-accent">{{ c.case_number }}</span></td>
+                <td>
+                    <div style="font-weight:500;">{{ c.title }}</div>
+                    <div class="mono" style="margin-top:2px;">#{{ c.id }}</div>
+                </td>
+                <td>
+                    {% if c.status == "open" %}<span class="badge badge-green">Open</span>
+                    {% elif c.status == "closed" %}<span class="badge badge-grey">Closed</span>
+                    {% else %}<span class="badge badge-red">Archived</span>{% endif %}
+                </td>
+                <td>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-family:var(--ff-m);font-size:13px;">{{ c.evidence_count }}</span>
+                        {% if c.evidence_count > 0 %}
+                        <div style="height:4px;width:{{ [c.evidence_count * 6, 80]|min }}px;background:var(--accent-2);border-radius:2px;opacity:.5;"></div>
+                        {% endif %}
+                    </div>
+                </td>
+                <td><span class="mono">{{ c.last_updated | ist_dt }}</span></td>
+                <td>
+                    <a href="/evidence?case_id={{ c.id }}" class="link">Evidence</a>
+                    {% if role in ["Admin","Investigator"] %}<span class="sep">|</span><a href="/cases/edit/{{ c.id }}" class="link">Edit</a>{% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-3);">
+                {% if query %}No cases match "{{ query }}"{% else %}No cases yet. <a href="/cases/add" class="link">Create one.</a>{% endif %}
+            </td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

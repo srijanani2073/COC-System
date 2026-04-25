@@ -1,0 +1,542 @@
+{% extends "layout.html" %}
+{% block title %}Neo4j Explorer — ECMS{% endblock %}
+{% block page_title %}Neo4j Explorer{% endblock %}
+{% block extra_styles %}
+/* ── Explorer layout ── */
+.explorer-grid{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start;}
+@media(max-width:900px){.explorer-grid{grid-template-columns:1fr;}}
+
+/* ── Function cards ── */
+.fn-list{display:flex;flex-direction:column;gap:6px;}
+.fn-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:12px 14px;cursor:pointer;transition:var(--tr);border-left:3px solid transparent;}
+.fn-card:hover{border-color:var(--border-2);background:var(--bg-2);}
+.fn-card.active{border-left-color:var(--accent);background:var(--accent-bg);}
+.fn-name{font-size:13px;font-weight:500;font-family:var(--ff-m);color:var(--text);margin-bottom:3px;}
+.fn-card.active .fn-name{color:var(--accent);}
+.fn-desc{font-size:11px;color:var(--text-3);line-height:1.4;}
+.fn-badge{display:inline-block;font-size:9px;font-family:var(--ff-m);padding:1px 6px;border-radius:3px;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;}
+.fn-badge.evidence{background:var(--blue-bg);color:var(--blue);}
+.fn-badge.case{background:var(--green-bg);color:var(--green);}
+.fn-badge.user{background:var(--amber-bg);color:var(--amber);}
+
+/* ── Param panel ── */
+.param-panel{background:var(--bg-2);border:1px solid var(--border);border-radius:7px;padding:14px;margin-top:12px;}
+.param-label{font-size:10px;font-family:var(--ff-m);color:var(--text-3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;}
+
+/* ── Results area ── */
+.result-pane{min-height:600px;}
+.view-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;}
+.view-tab{padding:9px 18px;font-size:12px;font-family:var(--ff-m);cursor:pointer;border-bottom:2px solid transparent;color:var(--text-3);transition:all .2s;background:none;border-top:none;border-left:none;border-right:none;}
+.view-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.view-tab:hover:not(.active){color:var(--text-2);}
+
+/* ── Graph canvas ── */
+#graphContainer{height:520px;background:var(--bg-2);border-radius:8px;border:1px solid var(--border);position:relative;overflow:hidden;}
+#graphCanvas{width:100%;height:100%;}
+.graph-toolbar{display:flex;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);}
+.graph-legend{display:flex;gap:14px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--border);background:var(--bg);}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:10px;font-family:var(--ff-m);color:var(--text-3);}
+.legend-dot{width:9px;height:9px;border-radius:50%;}
+
+/* ── Table ── */
+.result-table-wrap{overflow-x:auto;}
+.result-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.result-table th{padding:9px 14px;text-align:left;font-size:10px;font-family:var(--ff-m);font-weight:500;color:var(--text-3);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--bg-2);white-space:nowrap;}
+.result-table td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text);}
+.result-table tr:last-child td{border-bottom:none;}
+.result-table tbody tr:hover td{background:var(--bg);}
+
+/* ── Empty / loading states ── */
+.state-box{display:flex;flex-direction:column;align-items:center;justify-content:center;height:400px;gap:12px;color:var(--text-3);}
+.state-icon{font-size:40px;opacity:.3;}
+.state-title{font-family:var(--ff-d);font-size:17px;color:var(--text-2);}
+.state-sub{font-size:12px;font-family:var(--ff-m);}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Tooltip ── */
+.graph-tooltip{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:11px;font-family:var(--ff-m);color:var(--text);pointer-events:none;z-index:9999;max-width:220px;box-shadow:var(--sh);display:none;line-height:1.6;}
+{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Neo4j Explorer</div>
+        <div class="page-subtitle">Interactive graph traversal across all Neo4j functions</div>
+    </div>
+</div>
+
+<div class="explorer-grid">
+
+    <!-- ── LEFT: function selector ── -->
+    <div>
+        <div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;">Select Function</div>
+        <div class="fn-list">
+
+            <div class="fn-card active" data-fn="custody_chain" data-argtype="evidence" onclick="selectFn(this)">
+                <div class="fn-badge evidence">evidence_id</div>
+                <div class="fn-name">custody_chain_with_case</div>
+                <div class="fn-desc">Full 4-node chain: Case → Evidence → CustodyEvents, with from/to users per event.</div>
+            </div>
+
+            <div class="fn-card" data-fn="case_handlers" data-argtype="case" onclick="selectFn(this)">
+                <div class="fn-badge case">case_id</div>
+                <div class="fn-name">case_evidence_handlers</div>
+                <div class="fn-desc">Which users handled which evidence in a case, and how many times.</div>
+            </div>
+
+            <div class="fn-card" data-fn="user_involvement" data-argtype="user" onclick="selectFn(this)">
+                <div class="fn-badge user">user_id</div>
+                <div class="fn-name">user_case_involvement</div>
+                <div class="fn-desc">All cases a user is involved in, through which evidence items.</div>
+            </div>
+
+            <div class="fn-card" data-fn="verifications_by_case" data-argtype="case" onclick="selectFn(this)">
+                <div class="fn-badge case">case_id</div>
+                <div class="fn-name">verifications_by_case</div>
+                <div class="fn-desc">Who verified what evidence in a case, and what the result was.</div>
+            </div>
+
+            <div class="fn-card" data-fn="custody_gaps" data-argtype="evidence" onclick="selectFn(this)">
+                <div class="fn-badge evidence">evidence_id</div>
+                <div class="fn-name">detect_custody_gaps</div>
+                <div class="fn-desc">Detects breaks in the chain-of-custody where expected handler doesn't match.</div>
+            </div>
+
+            <div class="fn-card" data-fn="detect_cycles" data-argtype="evidence" onclick="selectFn(this)">
+                <div class="fn-badge evidence">evidence_id</div>
+                <div class="fn-name">detect_cycles</div>
+                <div class="fn-desc">Finds users who appear more than once as custody recipient — illegal loops.</div>
+            </div>
+
+        </div>
+
+        <!-- ── Param input ── -->
+        <div class="param-panel" id="paramPanel">
+            <div class="param-label" id="paramLabel">Evidence Item</div>
+            <select class="form-control" id="argSelect" style="margin-bottom:12px;">
+                <option value="">Choose…</option>
+            </select>
+            <button class="btn btn-primary btn-sm" style="width:100%;" onclick="runQuery()">
+                Run Query →
+            </button>
+        </div>
+
+        <div style="margin-top:14px;padding:12px;background:var(--bg-2);border:1px solid var(--border);border-radius:6px;">
+            <div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">Legend</div>
+            <div class="graph-legend" style="padding:0;border:none;background:none;gap:10px;">
+                <div class="legend-item"><div class="legend-dot" style="background:#2c4a6e;"></div>Evidence</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#166534;"></div>Case</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#8b1a1a;"></div>User</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#92400e;"></div>Custody</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#0e7490;"></div>Verify</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#7c3aed;"></div>Cycle/Gap</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── RIGHT: result area ── -->
+    <div class="result-pane">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title" id="resultTitle">Select a function and run a query</div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <span id="rowCount" class="mono" style="font-size:11px;color:var(--text-3);"></span>
+                    <button class="btn btn-secondary btn-xs" onclick="resetView()">Reset View</button>
+                </div>
+            </div>
+
+            <!-- View tabs -->
+            <div class="view-tabs" style="padding:0 20px;margin-bottom:0;">
+                <button class="view-tab active" onclick="switchView('graph',this)">Graph</button>
+                <button class="view-tab" onclick="switchView('table',this)">Table</button>
+            </div>
+
+            <!-- Graph view -->
+            <div id="viewGraph">
+                <div id="graphContainer">
+                    <canvas id="graphCanvas"></canvas>
+                    <div id="emptyState" class="state-box">
+                        <div class="state-icon">⬡</div>
+                        <div class="state-title">No graph loaded</div>
+                        <div class="state-sub">Pick a function on the left and press Run Query</div>
+                    </div>
+                    <div id="loadingState" class="state-box" style="display:none;">
+                        <div class="spinner"></div>
+                        <div class="state-sub">Querying Neo4j…</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table view -->
+            <div id="viewTable" style="display:none;padding:20px;">
+                <div id="tableContent">
+                    <div class="state-box" style="height:200px;">
+                        <div class="state-icon">⬡</div>
+                        <div class="state-sub">No data yet — run a query first</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tooltip -->
+<div class="graph-tooltip" id="graphTooltip"></div>
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+// ── Data from Flask ───────────────────────────────────────────────────────────
+const EVIDENCE_LIST = {{ evidence_list | tojson }};
+const CASE_LIST     = {{ case_list    | tojson }};
+const USER_LIST     = {{ user_list    | tojson }};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentFn      = 'custody_chain';
+let currentArgType = 'evidence';
+let graphNodes     = [], graphEdges = [];
+let transform      = {x:0, y:0, scale:1};
+let currentTableData = [];
+
+// ── Function selector ─────────────────────────────────────────────────────────
+function selectFn(card) {
+    document.querySelectorAll('.fn-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    currentFn      = card.dataset.fn;
+    currentArgType = card.dataset.argtype;
+    rebuildArgSelect();
+    // reset result
+    showEmptyState();
+    document.getElementById('resultTitle').textContent = card.querySelector('.fn-name').textContent;
+    document.getElementById('rowCount').textContent = '';
+}
+
+function rebuildArgSelect() {
+    const sel = document.getElementById('argSelect');
+    const lbl = document.getElementById('paramLabel');
+    sel.innerHTML = '<option value="">Choose…</option>';
+    if (currentArgType === 'evidence') {
+        lbl.textContent = 'Evidence Item';
+        EVIDENCE_LIST.forEach(e => {
+            const o = document.createElement('option');
+            o.value = e.id;
+            o.textContent = `${e.code} — ${e.tag || ''} (${e.case_number})`;
+            sel.appendChild(o);
+        });
+    } else if (currentArgType === 'case') {
+        lbl.textContent = 'Case';
+        CASE_LIST.forEach(c => {
+            const o = document.createElement('option');
+            o.value = c.id;
+            o.textContent = `${c.number} — ${c.title || ''}`;
+            sel.appendChild(o);
+        });
+    } else {
+        lbl.textContent = 'User';
+        USER_LIST.forEach(u => {
+            const o = document.createElement('option');
+            o.value = u.id;
+            o.textContent = `${u.name} (${u.role || ''})`;
+            sel.appendChild(o);
+        });
+    }
+}
+
+// ── Run query ─────────────────────────────────────────────────────────────────
+async function runQuery() {
+    const arg = document.getElementById('argSelect').value;
+    if (!arg) { alert('Please select a value first.'); return; }
+    showLoadingState();
+    try {
+        const res  = await fetch('/api/neo4j/query', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({fn: currentFn, arg})
+        });
+        const data = await res.json();
+        if (data.error) { showEmptyState(); alert('Error: ' + data.error); return; }
+
+        currentTableData = data.table || [];
+        buildGraph(data.graph || {nodes:[], edges:[]});
+        buildTable(currentTableData);
+
+        const n = (data.graph?.nodes||[]).length;
+        document.getElementById('rowCount').textContent =
+            `${n} node${n!==1?'s':''}, ${(data.graph?.edges||[]).length} edge${(data.graph?.edges||[]).length!==1?'s':''}`;
+
+    } catch(e) {
+        showEmptyState();
+        alert('Request failed: ' + e.message);
+    }
+}
+
+// ── View toggle ───────────────────────────────────────────────────────────────
+function switchView(name, btn) {
+    document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('viewGraph').style.display = name === 'graph' ? 'block' : 'none';
+    document.getElementById('viewTable').style.display = name === 'table'  ? 'block' : 'none';
+}
+
+// ── States ────────────────────────────────────────────────────────────────────
+function showEmptyState() {
+    document.getElementById('emptyState').style.display   = 'flex';
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('graphCanvas').style.display  = 'none';
+}
+function showLoadingState() {
+    document.getElementById('emptyState').style.display   = 'none';
+    document.getElementById('loadingState').style.display = 'flex';
+    document.getElementById('graphCanvas').style.display  = 'none';
+}
+function showGraphState() {
+    document.getElementById('emptyState').style.display   = 'none';
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('graphCanvas').style.display  = 'block';
+}
+
+// ── Graph rendering (same engine as custody.html) ─────────────────────────────
+const GROUP_COLORS = {
+    evidence: '#2c4a6e', user: '#8b1a1a', custody: '#92400e',
+    case: '#166534', verification: '#0e7490', cycle: '#7c3aed', gap: '#7c3aed'
+};
+const GROUP_RADIUS = {evidence:24, case:22, verification:16, custody:15, gap:14, user:13};
+
+function buildGraph(data) {
+    const canvas = document.getElementById('graphCanvas');
+    const W = canvas.offsetWidth || 800;
+    const H = 520;
+    canvas.width  = W;
+    canvas.height = H;
+
+    const nList = data.nodes || [];
+    const eList = data.edges || [];
+
+    if (!nList.length) { showEmptyState(); return; }
+
+    // Initial positions — circular
+    const positions = {};
+    nList.forEach((n, i) => {
+        const angle = (2 * Math.PI * i) / nList.length;
+        positions[n.id] = {
+            x: W/2 + Math.cos(angle) * Math.min(W, H) * 0.3,
+            y: H/2 + Math.sin(angle) * H * 0.28
+        };
+    });
+
+    // Force simulation
+    for (let iter = 0; iter < 120; iter++) {
+        // Repulsion
+        for (let i = 0; i < nList.length; i++) {
+            for (let j = i+1; j < nList.length; j++) {
+                const pa = positions[nList[i].id], pb = positions[nList[j].id];
+                const dx = pa.x - pb.x, dy = pa.y - pb.y;
+                const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+                const force = 900 / (dist * dist);
+                pa.x += dx/dist*force; pa.y += dy/dist*force;
+                pb.x -= dx/dist*force; pb.y -= dy/dist*force;
+            }
+        }
+        // Attraction along edges
+        eList.forEach(e => {
+            const pa = positions[e.from], pb = positions[e.to];
+            if (!pa || !pb) return;
+            const dx = pb.x - pa.x, dy = pb.y - pa.y;
+            const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+            const force = (dist - 130) * 0.045;
+            pa.x += dx/dist*force; pa.y += dy/dist*force;
+            pb.x -= dx/dist*force; pb.y -= dy/dist*force;
+        });
+        // Gravity
+        nList.forEach(n => {
+            const p = positions[n.id];
+            p.x += (W/2 - p.x) * 0.012;
+            p.y += (H/2 - p.y) * 0.012;
+        });
+    }
+
+    graphNodes = nList.map(n => ({
+        ...n,
+        x: positions[n.id].x,
+        y: positions[n.id].y,
+        color: GROUP_COLORS[n.group] || '#666',
+        r: GROUP_RADIUS[n.group] || 13
+    }));
+    graphEdges = eList;
+    transform = {x:0, y:0, scale:1};
+
+    showGraphState();
+    drawGraph();
+    setupInteraction(canvas);
+}
+
+function drawGraph() {
+    const canvas = document.getElementById('graphCanvas');
+    const ctx    = canvas.getContext('2d');
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const textCol = isDark ? '#e8e4dc' : '#1c1917';
+    const edgeCol = isDark ? '#3a3834' : '#c8c3ba';
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(transform.x, transform.y);
+    ctx.scale(transform.scale, transform.scale);
+
+    // Draw edges
+    graphEdges.forEach(e => {
+        const from = graphNodes.find(n => n.id === e.from);
+        const to   = graphNodes.find(n => n.id === e.to);
+        if (!from || !to) return;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.strokeStyle = edgeCol;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        // Arrow
+        const angle = Math.atan2(to.y - from.y, to.x - from.x);
+        const ar = to.r + 4;
+        ctx.beginPath();
+        ctx.moveTo(to.x - ar*Math.cos(angle), to.y - ar*Math.sin(angle));
+        ctx.lineTo(to.x - ar*Math.cos(angle) - 6*Math.cos(angle-0.4),
+                   to.y - ar*Math.sin(angle) - 6*Math.sin(angle-0.4));
+        ctx.lineTo(to.x - ar*Math.cos(angle) - 6*Math.cos(angle+0.4),
+                   to.y - ar*Math.sin(angle) - 6*Math.sin(angle+0.4));
+        ctx.closePath(); ctx.fillStyle = edgeCol; ctx.fill();
+        // Label
+        if (e.label) {
+            const mx = (from.x + to.x)/2, my = (from.y + to.y)/2;
+            ctx.font = '9px IBM Plex Mono,monospace';
+            ctx.fillStyle = isDark ? '#5c5852' : '#a8a29e';
+            ctx.textAlign = 'center';
+            ctx.fillText(e.label, mx, my - 4);
+        }
+    });
+
+    // Draw nodes
+    graphNodes.forEach(n => {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI*2);
+        ctx.fillStyle   = n.color + '22';
+        ctx.strokeStyle = n.color;
+        ctx.lineWidth   = 2;
+        ctx.fill(); ctx.stroke();
+        // Label
+        ctx.font = 'bold 10px IBM Plex Sans,sans-serif';
+        ctx.fillStyle  = textCol;
+        ctx.textAlign  = 'center';
+        const lbl = (n.label||'').length > 16 ? n.label.slice(0,14)+'…' : n.label;
+        ctx.fillText(lbl, n.x, n.y + n.r + 13);
+        // Subtitle
+        if (n.subtitle || n.role) {
+            ctx.font = '9px IBM Plex Mono,monospace';
+            ctx.fillStyle = isDark ? '#5c5852' : '#a8a29e';
+            ctx.fillText((n.subtitle || n.role || '').slice(0,18), n.x, n.y + n.r + 24);
+        }
+    });
+
+    ctx.restore();
+}
+
+let _interactionBound = false;
+function setupInteraction(canvas) {
+    if (_interactionBound) return;
+    _interactionBound = true;
+    let dragNode = null, offsetX = 0, offsetY = 0, lastMouse = null;
+    const tooltip = document.getElementById('graphTooltip');
+
+    canvas.addEventListener('mousedown', e => {
+        const mx = (e.offsetX - transform.x)/transform.scale;
+        const my = (e.offsetY - transform.y)/transform.scale;
+        dragNode = graphNodes.find(n => Math.hypot(n.x-mx, n.y-my) < n.r+4);
+        if (dragNode) { offsetX = mx-dragNode.x; offsetY = my-dragNode.y; }
+        else          { lastMouse = {x: e.offsetX, y: e.offsetY}; }
+    });
+    canvas.addEventListener('mousemove', e => {
+        const mx = (e.offsetX - transform.x)/transform.scale;
+        const my = (e.offsetY - transform.y)/transform.scale;
+        if (dragNode) {
+            dragNode.x = mx - offsetX; dragNode.y = my - offsetY;
+            drawGraph();
+        } else if (lastMouse) {
+            transform.x += e.offsetX - lastMouse.x;
+            transform.y += e.offsetY - lastMouse.y;
+            lastMouse = {x: e.offsetX, y: e.offsetY};
+            drawGraph();
+        }
+        // Hover tooltip
+        const hovered = graphNodes.find(n => Math.hypot(n.x-mx, n.y-my) < n.r+4);
+        if (hovered) {
+            let html = `<strong>${hovered.label}</strong><br>Group: ${hovered.group}`;
+            if (hovered.role)     html += `<br>Role: ${hovered.role}`;
+            if (hovered.etype)    html += `<br>Type: ${hovered.etype}`;
+            if (hovered.status)   html += `<br>Status: ${hovered.status}`;
+            if (hovered.action)   html += `<br>Action: ${hovered.action}`;
+            if (hovered.reason)   html += `<br>Reason: ${hovered.reason}`;
+            if (hovered.ts)       html += `<br>Time: ${hovered.ts}`;
+            if (hovered.location) html += `<br>Location: ${hovered.location}`;
+            if (hovered.result)   html += `<br>Result: ${hovered.result}`;
+            if (hovered.method)   html += `<br>Method: ${hovered.method}`;
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 14) + 'px';
+            tooltip.style.top  = (e.clientY - 10) + 'px';
+            canvas.style.cursor = 'pointer';
+        } else {
+            tooltip.style.display = 'none';
+            canvas.style.cursor = 'default';
+        }
+    });
+    canvas.addEventListener('mouseup',    () => { dragNode = null; lastMouse = null; });
+    canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; lastMouse = null; });
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const s = e.deltaY < 0 ? 1.1 : 0.9;
+        transform.scale = Math.max(0.2, Math.min(4, transform.scale * s));
+        drawGraph();
+    }, {passive: false});
+}
+
+function resetView() {
+    transform = {x:0, y:0, scale:1};
+    drawGraph();
+}
+
+// ── Table builder ─────────────────────────────────────────────────────────────
+function buildTable(rows) {
+    const wrap = document.getElementById('tableContent');
+    if (!rows || !rows.length) {
+        wrap.innerHTML = '<div class="state-box" style="height:160px;"><div class="state-sub">No rows returned.</div></div>';
+        return;
+    }
+    const keys = Object.keys(rows[0]);
+    let html = '<div class="result-table-wrap"><table class="result-table"><thead><tr>';
+    keys.forEach(k => { html += `<th>${k.replace(/_/g,' ')}</th>`; });
+    html += '</tr></thead><tbody>';
+    rows.forEach(row => {
+        html += '<tr>';
+        keys.forEach(k => {
+            let v = row[k];
+            if (v === null || v === undefined) v = '—';
+            else if (Array.isArray(v)) v = v.join(', ');
+            html += `<td>${String(v)}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    wrap.innerHTML = html;
+}
+
+// ── Theme redraw ──────────────────────────────────────────────────────────────
+document.getElementById('themeToggle')?.addEventListener('click', () => {
+    setTimeout(drawGraph, 50);
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    rebuildArgSelect();
+    document.getElementById('resultTitle').textContent = 'custody_chain_with_case';
+});
+</script>
+{% endblock %}

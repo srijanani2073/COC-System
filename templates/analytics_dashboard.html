@@ -1,0 +1,128 @@
+{% extends "layout.html" %}
+{% block title %}Analytics — ECMS{% endblock %}
+{% block page_title %}Analytics{% endblock %}
+{% block extra_styles %}
+.section-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:20px;overflow:hidden;box-shadow:var(--sh-sm);}
+.section-head{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.section-title{font-family:var(--ff-d);font-size:14px;font-weight:600;color:var(--text);}
+.section-body{padding:20px;}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;}
+.stat-box{text-align:center;padding:16px;background:var(--bg-2);border:1px solid var(--border);border-radius:6px;}
+.stat-num{font-family:var(--ff-d);font-size:26px;font-weight:700;color:var(--accent);margin-bottom:4px;}
+.stat-lbl{font-size:10px;font-family:var(--ff-m);color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.info-row:last-child{border-bottom:none;}
+.info-key{font-family:var(--ff-m);font-size:12px;color:var(--text-3);}
+.info-val{font-weight:500;}
+.hm-row{display:flex;align-items:center;gap:3px;margin-bottom:3px;}
+.hm-day{width:32px;font-size:10px;font-family:var(--ff-m);color:var(--text-3);flex-shrink:0;}
+.hm-cell{width:16px;height:16px;border-radius:2px;cursor:default;transition:transform .1s;}
+.hm-cell:hover{transform:scale(1.4);z-index:10;position:relative;}
+.hour-row{display:flex;gap:3px;padding-left:35px;margin-bottom:6px;}
+.hour-lbl{width:16px;font-size:8px;font-family:var(--ff-m);color:var(--text-3);text-align:center;flex-shrink:0;}
+.pattern-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--red-bg);border:1px solid rgba(153,27,27,.15);border-radius:6px;margin-bottom:8px;font-size:13px;}
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Analytics</div>
+        <div class="page-subtitle">PostgreSQL · Neo4j · MongoDB</div>
+    </div>
+    <button onclick="loadAll()" class="btn btn-secondary btn-sm">↻ Refresh</button>
+</div>
+
+<div class="section-card">
+    <div class="section-head"><div class="section-title">Evidence Statistics</div><span class="card-meta">PostgreSQL</span></div>
+    <div class="section-body" id="evStats"><div class="loading-row"><div class="spinner"></div>Loading…</div></div>
+</div>
+
+<div class="section-card">
+    <div class="section-head"><div class="section-title">Custody Statistics</div><span class="card-meta">PostgreSQL + Neo4j</span></div>
+    <div class="section-body" id="cocStats"><div class="loading-row"><div class="spinner"></div>Loading…</div></div>
+</div>
+
+<div class="grid-2 mb-20">
+    <div class="section-card" style="margin-bottom:0;">
+        <div class="section-head"><div class="section-title">Path Analysis</div><span class="card-meta" style="color:var(--accent-2);">Neo4j</span></div>
+        <div class="section-body" id="pathAn"><div class="loading-row"><div class="spinner"></div>Loading…</div></div>
+    </div>
+    <div class="section-card" style="margin-bottom:0;">
+        <div class="section-head"><div class="section-title">Transfer Frequency</div><span class="card-meta" style="color:var(--accent-2);">Neo4j</span></div>
+        <div class="section-body" id="xferFreq"><div class="loading-row"><div class="spinner"></div>Loading…</div></div>
+    </div>
+</div>
+
+<div class="section-card">
+    <div class="section-head"><div class="section-title">Suspicious Patterns</div><span class="card-meta" style="color:var(--red);">Anomaly Detection</span></div>
+    <div class="section-body" id="suspPat"><div class="loading-row"><div class="spinner"></div>Scanning…</div></div>
+</div>
+
+<div class="section-card">
+    <div class="section-head"><div class="section-title">Activity Heatmap</div><span class="card-meta">MongoDB — by day &amp; hour</span></div>
+    <div class="section-body" id="heatmap"><div class="loading-row"><div class="spinner"></div>Aggregating logs…</div></div>
+</div>
+
+{% if role in ['Admin','Investigator'] %}
+<div class="section-card">
+    <div class="section-head"><div class="section-title">Cross-Database Correlations</div><span class="card-meta">Multi-model</span></div>
+    <div class="section-body" id="crossDb"><div class="loading-row"><div class="spinner"></div>Correlating…</div></div>
+</div>
+{% endif %}
+
+{% if role == 'Admin' %}
+<div class="section-card" style="border-top:2px solid var(--amber);">
+    <div class="section-head"><div class="section-title">High-Risk Profiles</div><span class="badge badge-amber">Admin only</span></div>
+    <div class="section-body" id="riskP"><div class="loading-row"><div class="spinner"></div>Evaluating…</div></div>
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function load(id,url,fn){fetch(url).then(r=>r.json()).then(d=>document.getElementById(id).innerHTML=fn(d)).catch(e=>{document.getElementById(id).innerHTML='<span style="color:var(--red);font-family:var(--ff-m);font-size:12px;">Error: '+e.message+'</span>';});}
+function ir(k,v){return '<div class="info-row"><span class="info-key">'+k+'</span><span class="info-val">'+v+'</span></div>';}
+
+function renderEv(d){
+    const mb=d.total_size_mb||0, gb=d.total_size_gb||0;
+    const sizeStr = gb>=1 ? gb.toFixed(2)+' GB' : mb.toFixed(2)+' MB';
+    const noSizeNote = d.evidence_no_size>0
+        ? '<div style="font-size:10px;color:var(--text-3);font-family:var(--ff-m);margin-top:4px;">'+d.evidence_no_size+' physical items have no file size</div>'
+        : '';
+    const types=Object.entries(d.by_type||{}).map(([t,c])=>'<div class="stat-box"><div class="stat-num" style="font-size:18px;">'+c+'</div><div class="stat-lbl">'+t+'</div></div>').join('');
+    return '<div class="stat-grid" style="margin-bottom:14px;">'
+        +'<div class="stat-box"><div class="stat-num">'+(d.total_evidence||0)+'</div><div class="stat-lbl">Total Evidence</div></div>'
+        +'<div class="stat-box"><div class="stat-num">'+sizeStr+'</div><div class="stat-lbl">Total Size (digital)</div>'+noSizeNote+'</div>'
+        +'<div class="stat-box"><div class="stat-num">'+(d.recent_uploads_30d||0)+'</div><div class="stat-lbl">Uploads (30d)</div></div>'
+        +'</div>'+(types?'<div class="stat-grid">'+types+'</div>':'');
+}
+function renderCoc(d){
+    const u=(d.active_users||[]).slice(0,5).map(u=>ir(u.name,u.events+' events')).join('');
+    return '<div class="stat-grid" style="margin-bottom:14px;"><div class="stat-box"><div class="stat-num">'+(d.total_events||0)+'</div><div class="stat-lbl">Total Events</div></div><div class="stat-box"><div class="stat-num">'+(d.recent_events_7d||0)+'</div><div class="stat-lbl">Events (7d)</div></div></div>'+(u?'<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin-bottom:8px;">TOP ACTIVE USERS</div>'+u:'');
+}
+function renderPath(d){const c=(d.longest_chains||[]).slice(0,5).map(c=>ir('Evidence #'+c.evidence_id,c.chain_length+' transfers')).join('');return ir('Avg Chain Length',d.average_chain_length||'—')+ir('Max Chain Length',d.max_chain_length||'—')+(c?'<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin:12px 0 8px;">LONGEST CHAINS</div>'+c:'');}
+function renderXfer(d){const it=(d.most_transferred||[]).slice(0,5).map(i=>ir(i.evidence_code,i.transfers+' transfers')).join('');return ir('Total Transfers',d.total_transfers||0)+(it?'<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin:12px 0 8px;">MOST TRANSFERRED</div>'+it:'');}
+function renderSusp(d){if(!d.total_suspicious||d.total_suspicious===0)return '<div class="info-box ok"><span>✓</span><span>No suspicious patterns detected</span></div>';const rows=(d.patterns||[]).map(p=>'<div class="pattern-row"><span class="badge badge-'+(p.severity==='high'?'red':'amber')+'">'+p.severity+'</span><div style="flex:1;"><div style="font-weight:500;">'+p.type+'</div><div class="mono" style="margin-top:3px;">Evidence #'+p.evidence_id+' — '+p.time_difference_seconds+'s gap</div></div></div>').join('');return '<div style="color:var(--red);font-size:13px;margin-bottom:12px;font-weight:500;">'+d.total_suspicious+' pattern(s) found</div>'+rows;}
+function renderHeatmap(d){
+    if(!d.heatmap||!Object.keys(d.heatmap).length)return '<span class="mono">No log data available</span>';
+    const days=['','Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    let max=0;Object.values(d.heatmap).forEach(dd=>Object.values(dd).forEach(v=>{if(v>max)max=v;}));
+    const col=v=>{if(!v)return 'var(--bg-3)';const t=v/max;if(t<.25)return 'rgba(44,74,110,.25)';if(t<.5)return 'rgba(44,74,110,.5)';if(t<.75)return 'rgba(44,74,110,.75)';return '#2c4a6e';};
+    let h='<div class="hour-row">';for(let i=0;i<24;i++)h+='<div class="hour-lbl">'+i+'</div>';h+='</div>';
+    for(let day=1;day<=7;day++){h+='<div class="hm-row"><div class="hm-day">'+days[day]+'</div>';for(let hr=0;hr<24;hr++){const v=(d.heatmap[day]||{})[hr]||0;h+='<div class="hm-cell" style="background:'+col(v)+'" title="'+days[day]+' '+hr+':00 — '+v+' events"></div>';}h+='</div>';}
+    return h+'<div class="mono" style="margin-top:10px;">Total: '+(d.total_activities||0)+' activities</div>';
+}
+function renderCross(d){const a=(d.most_active_evidence||[]).slice(0,5).map(i=>ir('Evidence #'+i.evidence_id,i.activity_count+' activities')).join('');const v=(d.most_versioned_evidence||[]).slice(0,5).map(i=>ir(i.filename,i.versions+' versions')).join('');return '<div class="grid-2"><div>'+(a?'<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin-bottom:8px;">MOST ACTIVE</div>'+a:'')+'</div><div>'+(v?'<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin-bottom:8px;">MOST VERSIONED</div>'+v:'')+'</div></div>';}
+function renderRisk(d){const f=(d.users_with_failed_verifications||[]).map(u=>ir(u.name,u.failed_count+' failures')).join('');const fr=(d.frequent_transferrers||[]).map(u=>ir(u.name,u.transfer_count+' transfers')).join('');if(!f&&!fr)return '<div class="info-box ok"><span>✓</span><span>No high-risk profiles detected</span></div>';return '<div class="grid-2"><div>'+(f?'<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin-bottom:8px;">FAILED VERIFICATIONS</div>'+f:'')+'</div><div>'+(fr?'<div style="font-size:10px;font-family:var(--ff-m);color:var(--text-3);letter-spacing:1px;margin-bottom:8px;">FREQUENT TRANSFERRERS</div>'+fr:'')+'</div></div>';}
+
+function loadAll(){
+    load('evStats','/api/analytics/evidence-stats',renderEv);
+    load('cocStats','/api/analytics/custody-stats',renderCoc);
+    load('pathAn','/api/analytics/path-analysis',renderPath);
+    load('xferFreq','/api/analytics/transfer-frequency',renderXfer);
+    load('suspPat','/api/analytics/suspicious-patterns',renderSusp);
+    load('heatmap','/api/analytics/activity-heatmap',renderHeatmap);
+    {% if role in ['Admin','Investigator'] %}load('crossDb','/api/analytics/cross-database',renderCross);{% endif %}
+    {% if role == 'Admin' %}load('riskP','/api/analytics/risk-profiles',renderRisk);{% endif %}
+}
+document.addEventListener('DOMContentLoaded',loadAll);
+</script>
+{% endblock %}

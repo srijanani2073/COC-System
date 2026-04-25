@@ -1,0 +1,123 @@
+{% extends "layout.html" %}
+{% block title %}Edit Case — ECMS{% endblock %}
+{% block page_title %}Edit Case{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Edit Case</div>
+        <div class="page-subtitle mono-accent">{{ case.case_number }}</div>
+    </div>
+</div>
+<div style="max-width:600px;">
+    <div class="card">
+        <div class="card-header"><div class="card-title">Update Details</div><span class="card-meta">{{ case.case_number }}</span></div>
+        <div class="card-body">
+            <form method="POST" action="/cases/edit/{{ case.id }}">
+                <div class="form-group">
+                    <label class="form-label">Title</label>
+                    <input type="text" name="title" class="form-control" value="{{ case.title }}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea name="description" class="form-control">{{ case.description or "" }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-control" required>
+                        <option value="open" {% if case.status == "open" %}selected{% endif %}>Open</option>
+                        <option value="closed" {% if case.status == "closed" %}selected{% endif %}>Closed</option>
+                        <option value="archived" {% if case.status == "archived" %}selected{% endif %}>Archived</option>
+                    </select>
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <a href="/cases" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if role == 'Admin' %}
+<div style="max-width:600px;margin-top:24px;">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Evidence Access</div>
+            <span class="card-meta">Lawyers · Prosecutors · Judges</span>
+        </div>
+        <div class="card-body">
+            <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">
+                Control which external parties can download evidence from this case.
+                Internal roles (Admin, Investigator, Forensic Analyst) always have access.
+            </p>
+
+            <!-- Current access list -->
+            {% if access_list %}
+            <table class="tbl" style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Granted</th>
+                        <th>By</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for a in access_list %}
+                <tr>
+                    <td>
+                        <div style="font-weight:500;">{{ a.full_name }}</div>
+                        <div class="mono" style="font-size:11px;color:var(--text-3);">{{ a.username }}</div>
+                    </td>
+                    <td><span class="type-tag">{{ a.role }}</span></td>
+                    <td><span class="mono" style="font-size:11px;">{{ a.granted_at | ist_date }}</span></td>
+                    <td><span style="font-size:12px;color:var(--text-2);">{{ a.granted_by }}</span></td>
+                    <td>
+                        <form method="POST" action="/cases/{{ case.id }}/access/revoke/{{ a.user_id }}"
+                              onsubmit="return confirm('Revoke access for {{ a.full_name }}?')">
+                            <button type="submit" class="btn btn-danger btn-xs">Revoke</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state" style="padding:16px 0;">
+                <div class="empty-state-title">No external access granted yet</div>
+                <div style="font-size:12px;color:var(--text-3);margin-top:4px;">Use the form below to grant access.</div>
+            </div>
+            {% endif %}
+
+            <!-- Grant access form -->
+            {% if available_users %}
+            <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px;">
+                <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;">Grant Access</div>
+                <form method="POST" action="/cases/{{ case.id }}/access/grant" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+                    <div class="form-group" style="margin:0;flex:1;min-width:180px;">
+                        <label class="form-label">User</label>
+                        <select name="user_id" class="form-control" required>
+                            <option value="">— select user —</option>
+                            {% for u in available_users %}
+                            <option value="{{ u.user_id }}">{{ u.full_name }} ({{ u.role }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+                        <label class="form-label">Notes <span style="font-weight:400;color:var(--text-3);">(optional)</span></label>
+                        <input type="text" name="notes" class="form-control" placeholder="e.g. Defence counsel">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm" style="margin-bottom:1px;">Grant</button>
+                </form>
+            </div>
+            {% else %}
+            <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;font-size:12px;color:var(--text-3);">
+                All Lawyer / Prosecutor / Judge users already have access to this case.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

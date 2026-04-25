@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ECMS — Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f7f5f0;--surface:#fff;--border:#d8d4cc;--text:#1c1917;--text-2:#57534e;--text-3:#a8a29e;--accent:#8b1a1a;--accent-bg:rgba(139,26,26,.07);--red:#991b1b;--red-bg:rgba(153,27,27,.09);--ff-d:'Fraunces',Georgia,serif;--ff-b:'IBM Plex Sans',sans-serif;--ff-m:'IBM Plex Mono',monospace;}
+[data-theme="dark"]{--bg:#141412;--surface:#1e1c1a;--border:#2e2c28;--text:#e8e4dc;--text-2:#a8a39a;--text-3:#5c5852;--accent:#c0392b;--accent-bg:rgba(192,57,43,.1);--red:#f87171;--red-bg:rgba(248,113,113,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--ff-b);background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;transition:background .3s,color .3s;}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:48px 44px;width:100%;max-width:400px;box-shadow:0 4px 24px rgba(0,0,0,.08);}
+.login-logo{font-family:var(--ff-d);font-size:28px;font-weight:700;color:var(--accent);letter-spacing:-.5px;margin-bottom:4px;}
+.login-sub{font-size:13px;color:var(--text-3);font-family:var(--ff-m);margin-bottom:36px;}
+.form-group{margin-bottom:18px;}
+.form-label{display:block;font-size:11px;font-family:var(--ff-m);color:var(--text-2);letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px;}
+.form-control{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-size:14px;font-family:var(--ff-b);outline:none;transition:all .2s;}
+.form-control:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg);}
+.form-control::placeholder{color:var(--text-3);}
+.btn-login{width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:500;font-family:var(--ff-b);cursor:pointer;transition:all .2s;margin-top:8px;}
+.btn-login:hover{background:#6f1515;}
+.error-msg{background:var(--red-bg);border:1px solid rgba(153,27,27,.2);border-radius:6px;padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:18px;display:flex;gap:8px;align-items:flex-start;}
+.theme-btn{position:fixed;top:20px;right:20px;width:34px;height:34px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:15px;transition:all .2s;}
+.theme-btn:hover{border-color:var(--text-3);}
+</style>
+</head>
+<body>
+<button class="theme-btn" id="tt">☾</button>
+<div class="login-card">
+    <div class="login-logo">ECMS</div>
+    <div class="login-sub">Evidence Chain Management System</div>
+    {% if error %}
+    <div class="error-msg"><span>✕</span><span>{{ error }}</span></div>
+    {% endif %}
+    {% if demo_mode %}
+    <div style="background:rgba(139,92,246,.09);border:1px solid rgba(139,92,246,.3);border-radius:7px;padding:12px 14px;margin-bottom:20px;font-size:12.5px;color:#6d28d9;">
+      <strong>🔒 Demo / Read-only mode</strong><br>
+      This is a showcase build. All write operations (add, edit, delete, upload, seal, transfer) are disabled.<br>
+      <span style="opacity:.8;">Username: <code>{{ demo_user }}</code> &nbsp;·&nbsp; Password is pre-filled.</span>
+    </div>
+    {% endif %}
+    <form method="POST">
+        <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" name="username" class="form-control" placeholder="your username" required autocomplete="username"
+              {% if demo_mode %}value="{{ demo_user }}"{% endif %}>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" name="password" class="form-control" placeholder="••••••••" required autocomplete="current-password"
+              {% if demo_mode %}value="demo1234"{% endif %}>
+        </div>
+        <button type="submit" class="btn-login">{% if demo_mode %}Enter Demo{% else %}Sign in{% endif %}</button>
+    </form>
+</div>
+<script>
+const h=document.documentElement,t=document.getElementById('tt');
+const s=localStorage.getItem('ecms-theme')||'light';
+h.setAttribute('data-theme',s);t.textContent=s==='dark'?'☀':'☾';
+t.addEventListener('click',()=>{const n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('ecms-theme',n);t.textContent=n==='dark'?'☀':'☾';});
+</script>
+</body></html>

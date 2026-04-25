@@ -1,0 +1,91 @@
+{% extends "layout.html" %}
+{% block title %}Timeline — ECMS{% endblock %}
+{% block page_title %}Activity Timeline{% endblock %}
+
+{% block extra_styles %}
+.timeline-wrap { position: relative; padding-left: 32px; }
+.timeline-wrap::before {
+    content: ''; position: absolute; left: 6px; top: 0; bottom: 0;
+    width: 1px; background: var(--border);
+}
+.tl-entry {
+    position: relative; display: flex; gap: 20px;
+    padding-bottom: 24px; animation: fadeUp .3s ease both;
+}
+.tl-entry::before {
+    content: ''; position: absolute; left: -27px; top: 6px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--bg-card); border: 2px solid var(--border);
+}
+.tl-entry.ev-upload::before  { border-color: var(--blue); background: var(--blue-bg); }
+.tl-entry.ev-custody::before { border-color: var(--amber); background: var(--amber-bg); }
+.tl-entry.ev-sealed::before  { border-color: var(--accent); background: var(--accent-bg); }
+.tl-entry.ev-verified::before { border-color: var(--green); background: var(--green-bg); }
+.tl-time {
+    flex-shrink: 0; width: 130px; font-family: var(--mono);
+    font-size: 10px; color: var(--text-3); line-height: 1.6; padding-top: 2px;
+}
+.tl-body { flex: 1; }
+.tl-type { font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px;
+           text-transform: uppercase; margin-bottom: 3px; }
+.tl-desc { font-size: 13px; color: var(--text); line-height: 1.45; }
+.tl-meta { font-family: var(--mono); font-size: 10px; color: var(--text-3); margin-top: 4px; }
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-header-title">Activity Timeline</div>
+        <div class="page-header-sub">{{ timeline|length }} event{% if timeline|length != 1 %}s{% endif %}</div>
+    </div>
+</div>
+
+<div class="card mb-24" style="max-width:460px;">
+    <div class="card-body">
+        <form method="get" style="display:flex;gap:10px;align-items:flex-end;">
+            <div style="flex:1;">
+                <label class="form-label">Filter by Case</label>
+                <select name="case_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">— All cases —</option>
+                    {% for c in cases %}
+                    <option value="{{ c.id }}" {% if selected_case_id == c.id %}selected{% endif %}>
+                        {{ c.case_number }} — {{ c.title }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if selected_case_id %}<a href="/timeline" class="btn btn-secondary">Clear</a>{% endif %}
+        </form>
+    </div>
+</div>
+
+{% if timeline %}
+<div class="timeline-wrap">
+{% for ev in timeline %}
+{% set et = ev.event_type or '' %}
+<div class="tl-entry {% if 'upload' in et %}ev-upload{% elif 'custody' in et %}ev-custody{% elif 'seal' in et %}ev-sealed{% elif 'verif' in et %}ev-verified{% endif %}">
+    <div class="tl-time">
+        {{ ev.timestamp | ist_date if ev.timestamp else '—' }}<br>
+        {{ ev.timestamp | ist_time('%H:%M:%S') if ev.timestamp else '' }}
+    </div>
+    <div class="tl-body">
+        <div class="tl-type" style="color:{% if 'upload' in et %}var(--blue){% elif 'custody' in et %}var(--amber){% elif 'seal' in et %}var(--accent){% elif 'verif' in et %}var(--green){% else %}var(--text-3){% endif %}">
+            {{ et.replace('_',' ') }}
+        </div>
+        <div class="tl-desc">{{ ev.description }}</div>
+        <div class="tl-meta">
+            {% if ev.case_id %}Case #{{ ev.case_id }}{% endif %}
+            {% if ev.actor_id %} · User #{{ ev.actor_id }}{% endif %}
+            {% if ev.entity_id and ev.entity %} · {{ ev.entity }} #{{ ev.entity_id }}{% endif %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty-state" style="padding:80px 24px;">
+    <div class="empty-state-title">No events recorded</div>
+    <div class="text-muted">Activity from cases and evidence uploads will appear here.</div>
+</div></div>
+{% endif %}
+{% endblock %}

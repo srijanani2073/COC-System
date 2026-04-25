@@ -1,0 +1,347 @@
+{% extends "layout.html" %}
+{% block title %}Chain of Custody — ECMS{% endblock %}
+{% block page_title %}Chain of Custody{% endblock %}
+{% block extra_styles %}
+.coc-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:24px;}
+.coc-tab{padding:10px 20px;font-size:13px;font-family:var(--ff-m);cursor:pointer;border-bottom:2px solid transparent;color:var(--text-3);transition:all .2s;background:none;border-top:none;border-left:none;border-right:none;}
+.coc-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.coc-tab:hover:not(.active){color:var(--text-2);}
+.coc-log-item{display:flex;gap:0;padding:14px 0;border-bottom:1px solid var(--border);animation:fadeUp .3s ease;}
+.coc-log-item:last-child{border-bottom:none;}
+.coc-num{width:28px;height:28px;border-radius:50%;background:var(--accent-bg-2);color:var(--accent-2);font-size:11px;font-family:var(--ff-m);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:16px;font-weight:600;}
+.coc-body{flex:1;}
+.coc-transfer{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
+.coc-user{font-size:13px;font-weight:500;background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:3px 10px;}
+.coc-arrow{color:var(--text-3);font-size:12px;}
+.coc-reason{font-size:13px;color:var(--text-2);margin-bottom:4px;}
+.coc-meta{font-family:var(--ff-m);font-size:11px;color:var(--text-3);}
+.gap-item{background:var(--red-bg);border:1px solid rgba(153,27,27,.2);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:12px;font-family:var(--ff-m);color:var(--red);}
+.cycle-item{background:var(--amber-bg);border:1px solid rgba(146,64,14,.2);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--amber);}
+#graphContainer{height:500px;background:var(--bg-2);border-radius:8px;border:1px solid var(--border);position:relative;overflow:hidden;}
+#graphCanvas{width:100%;height:100%;}
+.graph-legend{display:flex;gap:16px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid var(--border);background:var(--bg);}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;font-family:var(--ff-m);color:var(--text-3);}
+.legend-dot{width:10px;height:10px;border-radius:50%;}
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Chain of Custody</div>
+        <div class="page-subtitle">Neo4j graph-powered provenance tracking</div>
+    </div>
+</div>
+
+<div class="card mb-24" style="max-width:580px;">
+    <div class="card-body">
+        <form method="get" style="display:flex;gap:10px;align-items:flex-end;">
+            <div style="flex:1;">
+                <label class="form-label">Evidence Item</label>
+                <select name="evidence_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select evidence…</option>
+                    {% for ev in evidence_list %}
+                    <option value="{{ ev.id }}" {% if selected_evidence and ev.id == selected_evidence.id %}selected{% endif %}>
+                        {{ ev.code }} — {{ ev.tag }} ({{ ev.case_number }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if selected_evidence %}
+<div class="card mb-20">
+    <div class="card-body" style="display:flex;gap:40px;flex-wrap:wrap;">
+        <div><div class="mono" style="margin-bottom:3px;">Evidence Code</div><div class="mono-accent" style="font-size:14px;font-weight:600;">{{ selected_evidence.code }}</div></div>
+        <div><div class="mono" style="margin-bottom:3px;">Tag</div><div style="font-weight:500;">{{ selected_evidence.tag }}</div></div>
+        <div><div class="mono" style="margin-bottom:3px;">Case</div><div style="font-weight:500;">{{ selected_evidence.case_number }} — {{ selected_evidence.case_title }}</div></div>
+        <div><div class="mono" style="margin-bottom:3px;">Case Status</div>
+            <div style="font-weight:600;{% if selected_evidence.case_status == 'closed' %}color:#ef4444;{% elif selected_evidence.case_status == 'archived' %}color:#eab308;{% else %}color:#22c55e;{% endif %}">
+                {{ selected_evidence.case_status|upper }}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if selected_evidence.case_status == 'closed' %}
+<div class="info-box warn mb-20" style="border-color:rgba(220,38,38,0.3);background:rgba(220,38,38,0.07);">
+    <span style="color:#ef4444;">🔒</span>
+    <div style="color:#ef4444;"><strong>Case Closed</strong> — Evidence transfers are blocked. All evidence in this case is sealed.</div>
+</div>
+{% endif %}
+
+{% if role in ['Admin','Investigator'] and selected_evidence.case_status != 'closed' %}
+<div class="card mb-24" style="max-width:580px;">
+    <div class="card-header"><div class="card-title">Transfer Custody</div></div>
+    <div class="card-body">
+        <form method="post" action="/custody/transfer">
+            <input type="hidden" name="evidence_id" value="{{ selected_evidence.id }}">
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-label">Transfer To</label>
+                    <select name="to_user" class="form-control" required>
+                        <option value="">Select recipient…</option>
+                        {% for u in users %}<option value="{{ u.id }}">{{ u.name }} ({{ u.role }})</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Location</label>
+                    <input type="text" name="location" class="form-control" placeholder="Storage / transfer location">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Reason</label>
+                <textarea name="reason" class="form-control" rows="2" required placeholder="State the reason for this transfer…"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Transfer</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% if gaps %}
+<div class="info-box danger mb-20"><span>⚠</span><div><strong>{{ gaps|length }} Custody Gap(s) Detected</strong>
+{% for g in gaps %}<div style="margin-top:6px;font-size:12px;font-family:var(--ff-m);">Gap at transfer {{ g.gap_index+1 }} — expected {{ g.expected_from_user }}, got {{ g.actual_from_user }}</div>{% endfor %}
+</div></div>
+{% endif %}
+
+{% if cycles %}
+<div class="info-box warn mb-20"><span>⟳</span><div><strong>{{ cycles|length }} Custody Cycle(s) Detected</strong>
+{% for c in cycles %}
+<div style="margin-top:6px;font-size:12px;font-family:var(--ff-m);">
+  {%- set cuser = users|selectattr('id','equalto',c.user_id)|first -%}
+  ⚠ {{ cuser.name if cuser else 'User #' ~ c.user_id }} appears {{ c.appearances }} times as recipient — possible illegal custody loop ({{ c.custody_event_ids|length }} events)
+</div>
+{% endfor %}
+</div></div>
+{% endif %}
+
+<div class="coc-tabs">
+    <button class="coc-tab active" onclick="showTab('log',this)">Log View</button>
+    <button class="coc-tab" onclick="showTab('graph',this)">Graph View (Neo4j)</button>
+</div>
+
+<div id="tabLog">
+    <div class="card">
+        <div class="card-header"><div class="card-title">Custody Register</div><span class="badge badge-blue">{{ custody_chain|length }} transfers</span></div>
+        <div class="card-body" style="padding:0 20px;">
+            {% if custody_chain %}
+            {% for ev in custody_chain %}
+            <div class="coc-log-item">
+                <div class="coc-num">{{ loop.index }}</div>
+                <div class="coc-body">
+                    <div class="coc-transfer">
+                        <div class="coc-user">{{ ev.from_user }}</div>
+                        <div class="coc-arrow">→</div>
+                        <div class="coc-user">{{ ev.to_user }}</div>
+                    </div>
+                    <div class="coc-reason">{{ ev.reason }}</div>
+                    <div class="coc-meta">ID {{ ev.custody_id }} · {{ ev.timestamp | ist_dt if ev.timestamp else '—' }}</div>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="text-muted" style="padding:20px 0;">No transfers recorded.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div id="tabGraph" style="display:none;">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Custody Graph</div>
+            <div style="display:flex;gap:8px;">
+                <button onclick="resetView()" class="btn btn-secondary btn-xs">Reset View</button>
+            </div>
+        </div>
+        <div id="graphContainer"><canvas id="graphCanvas"></canvas></div>
+        <div class="graph-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#2c4a6e;"></div>Evidence</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#8b1a1a;"></div>User</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#92400e;"></div>Custody Event</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#166534;"></div>Case</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#0e7490;"></div>Verification</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#7c3aed;"></div>Cycle Detected</div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div style="text-align:center;padding:80px;color:var(--text-3);">
+    <div style="font-family:var(--ff-d);font-size:18px;margin-bottom:8px;color:var(--text-2);">Select an evidence item to view its custody chain</div>
+    <div class="mono">Powered by Neo4j graph traversal</div>
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function showTab(name, btn) {
+    document.querySelectorAll('.coc-tab').forEach(t=>t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tabLog').style.display = name==='log' ? 'block' : 'none';
+    document.getElementById('tabGraph').style.display = name==='graph' ? 'block' : 'none';
+    if(name==='graph') loadGraph();
+}
+
+let graphLoaded = false, nodes=[], edges=[], transform={x:0,y:0,scale:1}, dragging=null, dragStart=null, canvasDrag=false, canvasDragStart=null;
+
+async function loadGraph() {
+    if(graphLoaded) return;
+    const evidenceId = new URLSearchParams(location.search).get('evidence_id');
+    if(!evidenceId) return;
+    const data = await fetch('/api/custody/graph/'+evidenceId).then(r=>r.json());
+    graphLoaded = true;
+    buildGraph(data);
+}
+
+function buildGraph(data) {
+    const canvas = document.getElementById('graphCanvas');
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const W = canvas.offsetWidth, H = canvas.offsetHeight;
+    canvas.width = W; canvas.height = H;
+
+    const groupColors = {
+        evidence: '#2c4a6e', user: '#8b1a1a', custody: '#92400e',
+        case: '#166534', verification: '#0e7490', cycle: '#7c3aed'
+    };
+
+    // Layout nodes in a force-directed style (simplified)
+    const positions = {};
+    const nList = data.nodes || [];
+    const eList = data.edges || [];
+    const cycleIds = new Set((data.cycles||[]).map(c=>'user_'+c.user_id));
+
+    nList.forEach((n,i) => {
+        const angle = (2*Math.PI*i)/nList.length;
+        positions[n.id] = { x: W/2 + Math.cos(angle)*160, y: H/2 + Math.sin(angle)*140 };
+    });
+
+    // Simple force simulation
+    for(let iter=0; iter<80; iter++) {
+        // Repulsion
+        nList.forEach((a,i) => {
+            nList.forEach((b,j) => {
+                if(i>=j) return;
+                const pa=positions[a.id], pb=positions[b.id];
+                const dx=pa.x-pb.x, dy=pa.y-pb.y;
+                const dist=Math.sqrt(dx*dx+dy*dy)||1;
+                const force=800/(dist*dist);
+                pa.x+=dx/dist*force; pa.y+=dy/dist*force;
+                pb.x-=dx/dist*force; pb.y-=dy/dist*force;
+            });
+        });
+        // Attraction (edges)
+        eList.forEach(e => {
+            const pa=positions[e.from], pb=positions[e.to];
+            if(!pa||!pb) return;
+            const dx=pb.x-pa.x, dy=pb.y-pa.y;
+            const dist=Math.sqrt(dx*dx+dy*dy)||1;
+            const force=(dist-120)*0.05;
+            pa.x+=dx/dist*force; pa.y+=dy/dist*force;
+            pb.x-=dx/dist*force; pb.y-=dy/dist*force;
+        });
+        // Center gravity
+        nList.forEach(n => {
+            const p=positions[n.id];
+            p.x+=(W/2-p.x)*0.01; p.y+=(H/2-p.y)*0.01;
+        });
+    }
+
+    nodes = nList.map(n => ({
+        ...n,
+        x: positions[n.id].x, y: positions[n.id].y,
+        color: cycleIds.has(n.id) ? groupColors.cycle : (groupColors[n.group]||'#666'),
+        r: n.group==='evidence'?24:n.group==='case'?20:n.group==='verification'?16:14
+    }));
+    edges = eList;
+
+    drawGraph();
+    addCanvasInteraction(canvas);
+}
+
+function drawGraph() {
+    const canvas = document.getElementById('graphCanvas');
+    const ctx = canvas.getContext('2d');
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.save();
+    ctx.translate(transform.x, transform.y);
+    ctx.scale(transform.scale, transform.scale);
+
+    const bg = isDark ? '#1c1a18' : '#efecea';
+    const textCol = isDark ? '#e8e4dc' : '#1c1917';
+    const edgeCol = isDark ? '#3a3834' : '#c8c3ba';
+
+    // Edges
+    edges.forEach(e => {
+        const from=nodes.find(n=>n.id===e.from), to=nodes.find(n=>n.id===e.to);
+        if(!from||!to) return;
+        ctx.beginPath();
+        ctx.moveTo(from.x,from.y);
+        ctx.lineTo(to.x,to.y);
+        ctx.strokeStyle=edgeCol; ctx.lineWidth=1.5;
+        ctx.stroke();
+        // Arrow
+        const angle=Math.atan2(to.y-from.y,to.x-from.x);
+        const ar=to.r+4;
+        ctx.beginPath();
+        ctx.moveTo(to.x-ar*Math.cos(angle),to.y-ar*Math.sin(angle));
+        ctx.lineTo(to.x-ar*Math.cos(angle)-6*Math.cos(angle-0.4),to.y-ar*Math.sin(angle)-6*Math.sin(angle-0.4));
+        ctx.lineTo(to.x-ar*Math.cos(angle)-6*Math.cos(angle+0.4),to.y-ar*Math.sin(angle)-6*Math.sin(angle+0.4));
+        ctx.closePath(); ctx.fillStyle=edgeCol; ctx.fill();
+        // Edge label
+        if(e.label) {
+            const mx=(from.x+to.x)/2, my=(from.y+to.y)/2;
+            ctx.font='9px IBM Plex Mono,monospace';
+            ctx.fillStyle=isDark?'#5c5852':'#a8a29e';
+            ctx.textAlign='center'; ctx.fillText(e.label,mx,my-4);
+        }
+    });
+
+    // Nodes
+    nodes.forEach(n => {
+        ctx.beginPath();
+        ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
+        ctx.fillStyle=n.color+'22';
+        ctx.strokeStyle=n.color; ctx.lineWidth=2;
+        ctx.fill(); ctx.stroke();
+        // Main label
+        ctx.font='bold 10px IBM Plex Sans,sans-serif';
+        ctx.fillStyle=textCol; ctx.textAlign='center';
+        const label=n.label.length>16?n.label.slice(0,14)+'…':n.label;
+        ctx.fillText(label,n.x,n.y+n.r+13);
+        // Subtitle (role / uploader / creator)
+        if(n.subtitle||n.role) {
+            ctx.font='9px IBM Plex Mono,monospace';
+            ctx.fillStyle=isDark?'#5c5852':'#a8a29e';
+            ctx.fillText((n.subtitle||n.role||'').slice(0,18),n.x,n.y+n.r+24);
+        }
+    });
+
+    ctx.restore();
+}
+
+function addCanvasInteraction(canvas) {
+    let dragNode=null, offsetX=0, offsetY=0, lastMouse=null;
+
+    canvas.addEventListener('mousedown',e=>{
+        const mx=(e.offsetX-transform.x)/transform.scale, my=(e.offsetY-transform.y)/transform.scale;
+        dragNode = nodes.find(n=>Math.hypot(n.x-mx,n.y-my)<n.r+4);
+        if(dragNode){offsetX=mx-dragNode.x;offsetY=my-dragNode.y;}
+        else{lastMouse={x:e.offsetX,y:e.offsetY};}
+    });
+    canvas.addEventListener('mousemove',e=>{
+        if(dragNode){const mx=(e.offsetX-transform.x)/transform.scale,my=(e.offsetY-transform.y)/transform.scale;dragNode.x=mx-offsetX;dragNode.y=my-offsetY;drawGraph();}
+        else if(lastMouse){transform.x+=e.offsetX-lastMouse.x;transform.y+=e.offsetY-lastMouse.y;lastMouse={x:e.offsetX,y:e.offsetY};drawGraph();}
+    });
+    canvas.addEventListener('mouseup',()=>{dragNode=null;lastMouse=null;});
+    canvas.addEventListener('wheel',e=>{e.preventDefault();const s=e.deltaY<0?1.1:0.9;transform.scale*=s;transform.scale=Math.max(0.3,Math.min(3,transform.scale));drawGraph();},{passive:false});
+}
+
+function resetView(){transform={x:0,y:0,scale:1};drawGraph();}
+
+// Redraw on theme toggle
+document.getElementById('themeToggle').addEventListener('click',()=>{setTimeout(drawGraph,50);});
+</script>
+{% endblock %}
