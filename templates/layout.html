@@ -276,8 +276,8 @@
         <div class="topbar-user">
             <div class="user-initials">{{ (user or 'U')[0]|upper }}</div>
             <div>
-                <div class="user-name-top">{{ user }}</div>
-                <div class="user-role-top">{{ role }}</div>
+                <div class="user-name-top">{{ user }}{% if is_demo %}&nbsp;<span style="font-size:9px;background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:3px;padding:1px 5px;font-family:var(--ff-m);letter-spacing:.4px;vertical-align:middle;">DEMO</span>{% endif %}</div>
+                <div class="user-role-top">{{ role }}{% if is_demo %} · read-only{% endif %}</div>
             </div>
         </div>
         <a href="/logout" class="logout-link">logout</a>
@@ -296,11 +296,11 @@
 </div>
 
 <div class="main-wrap" id="mainWrap">
-    {% if demo_mode %}
-    <div style="background:rgba(139,92,246,.08);border-bottom:1px solid rgba(139,92,246,.25);padding:8px 32px;font-size:12px;color:#6d28d9;display:flex;align-items:center;gap:8px;font-family:var(--ff-m);">
+    {% if is_demo %}
+    <div style="background:#fffbeb;border-bottom:1px solid #fbbf24;padding:9px 32px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:8px;font-family:var(--ff-m);flex-wrap:wrap;">
       <span>🔒</span>
-      <strong>READ-ONLY DEMO</strong> — All add / edit / delete / upload actions are disabled.
-      &nbsp;Want the full working project? <a href="mailto:srijananiamrita@gmail.com" style="color:#6d28d9;font-weight:600;">Request it via email.</a>
+      <span><strong>READ-ONLY DEMO</strong> — You are logged in as Admin (Demo). All data is visible but add / edit / delete / upload / transfer actions are disabled.</span>
+      <span style="margin-left:auto;">Want the full working project? <a href="mailto:srijananiamrita@gmail.com" style="color:#92400e;font-weight:600;text-decoration:underline;">Request it via email.</a></span>
     </div>
     {% endif %}
     <div class="page-body">{% block content %}{% endblock %}</div>
@@ -321,6 +321,140 @@ function applySB(){if(col){sb.classList.add('collapsed');tb.classList.add('sc');
 applySB();
 tog.addEventListener('click',()=>{col=!col;localStorage.setItem('ecms-sb',col?'1':'');applySB();});
 setTimeout(()=>{document.querySelectorAll('.toast').forEach(t=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>t.remove(),400);});},5000);
+{% if is_demo %}
+/* ── CLIENT-SIDE DEMO GUARD ─────────────────────────────────────────── */
+(function(){
+  'use strict';
+
+  /* 1. Toast helper */
+  function showDemoToast(){
+    const stack=document.getElementById('toastStack');
+    if(!stack||stack.querySelector('.demo-toast'))return;
+    const t=document.createElement('div');
+    t.className='toast toast-warning demo-toast';
+    t.innerHTML='<span class="toast-icon">⚠</span><span><strong>Demo mode</strong> — write operations are disabled. '
+      +'<a href="mailto:srijananiamrita@gmail.com" style="color:inherit;text-decoration:underline;">Request the full project.</a></span>';
+    t.onclick=()=>t.remove();
+    stack.appendChild(t);
+    setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>t.remove(),400);},6000);
+  }
+
+  /* 2. Patch fetch — block non-GET */
+  const _origFetch=window.fetch;
+  window.fetch=function(input,init){
+    const m=((init&&init.method)||'GET').toUpperCase();
+    if(m!=='GET'&&m!=='HEAD'){
+      showDemoToast();
+      return Promise.resolve(new Response(
+        JSON.stringify({error:'demo_mode'}),
+        {status:403,headers:{'Content-Type':'application/json'}}
+      ));
+    }
+    return _origFetch.apply(this,arguments);
+  };
+
+  /* 3. Patch XHR */
+  const _origOpen=XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open=function(method){
+    this._dm=method.toUpperCase();
+    return _origOpen.apply(this,arguments);
+  };
+  const _origSend=XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send=function(){
+    if(this._dm&&this._dm!=='GET'&&this._dm!=='HEAD'){
+      showDemoToast();
+      Object.defineProperty(this,'status',{get:()=>403});
+      Object.defineProperty(this,'readyState',{get:()=>4});
+      Object.defineProperty(this,'responseText',{get:()=>JSON.stringify({error:'demo_mode'})});
+      setTimeout(()=>{if(typeof this.onreadystatechange==='function')this.onreadystatechange();},0);
+      setTimeout(()=>{if(typeof this.onload==='function')this.onload();},0);
+      return;
+    }
+    return _origSend.apply(this,arguments);
+  };
+
+  /* 4. Stub write-action JS functions (modals, verify, seal, etc.) */
+  ['openSealModal','openUnsealModal','confirmSeal','confirmUnseal',
+   'verifyEvidence','verifySingle','startBulk','bulkVerify',
+   'revokeAccess','grantAccess'].forEach(fn=>{
+    window[fn]=function(){showDemoToast();};
+  });
+
+  /* 5. DOM button/form/link blocking */
+  const WRITE_HREF=['/add','/edit','/seal','/unseal','/transfer',
+                    '/verify','/grant','/revoke','/delete','/download',
+                    '/signed-url','/bulk-verify','/access/'];
+  const SAFE_TEXT=['view','back','cancel','close','filter','search','export','refresh'];
+
+  function blockEl(el){
+    if(el.dataset.dg)return;
+    el.dataset.dg='1';
+    el.style.opacity='.38';
+    el.style.cursor='not-allowed';
+    el.style.filter='grayscale(50%)';
+    el.addEventListener('click',function(e){
+      e.preventDefault();e.stopImmediatePropagation();showDemoToast();
+    },true);
+  }
+
+  function isWriteLink(el){
+    const h=el.getAttribute('href')||'';
+    return WRITE_HREF.some(p=>h.includes(p));
+  }
+
+  function isSafeButton(el){
+    const txt=(el.textContent||'').toLowerCase().trim();
+    return SAFE_TEXT.some(w=>txt.includes(w));
+  }
+
+  function applyDemo(){
+    /* block form submits */
+    document.querySelectorAll('form[method="post"],form[method="POST"]').forEach(f=>{
+      if(f.id==='loginForm'||f.dataset.dg)return;
+      f.dataset.dg='1';
+      f.addEventListener('submit',function(e){
+        e.preventDefault();e.stopImmediatePropagation();showDemoToast();
+      },true);
+    });
+
+    /* block submit buttons */
+    document.querySelectorAll('button[type="submit"]').forEach(el=>{
+      if(el.closest('#loginForm')||el.dataset.dg)return;
+      blockEl(el);
+    });
+
+    /* block action-class buttons (not safe navigation ones) */
+    document.querySelectorAll('.btn-primary,.btn-danger,.btn-amber,.btn-success').forEach(el=>{
+      if(el.closest('#loginForm')||el.dataset.dg||isSafeButton(el))return;
+      blockEl(el);
+    });
+
+    /* block onclick-write buttons */
+    document.querySelectorAll('button[onclick]').forEach(el=>{
+      if(el.dataset.dg)return;
+      const fn=(el.getAttribute('onclick')||'').toLowerCase();
+      if(['verify','seal','unseal','transfer','confirm','bulk','grant',
+          'revoke','sign','delete','upload'].some(k=>fn.includes(k))){
+        blockEl(el);
+      }
+    });
+
+    /* block write-route anchor links */
+    document.querySelectorAll('a[href]').forEach(el=>{
+      if(el.dataset.dg)return;
+      if(isWriteLink(el))blockEl(el);
+    });
+  }
+
+  /* 6. Run on load + watch DOM for dynamic content */
+  function init(){
+    applyDemo();
+    new MutationObserver(applyDemo).observe(document.body,{childList:true,subtree:true});
+  }
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}
+  else{init();}
+})();
+{% endif %}
 </script>
 {% block extra_scripts %}{% endblock %}
 </body>
