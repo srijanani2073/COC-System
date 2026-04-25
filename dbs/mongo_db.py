@@ -49,7 +49,10 @@ def now_ist():
     """
     return datetime.now(_IST)
 
-MONGO_URI = "mongodb+srv://mongo_admin:mongo_admin@chain.eo0luzb.mongodb.net/?appName=chain"
+MONGO_URI = os.environ.get("MONGO_URI")
+    if not mongo_uri:
+        raise ValueError("MONGO_URI not set in environment variables")
+      
 client    = MongoClient(MONGO_URI)
 db        = client["evidence_db"]
 
