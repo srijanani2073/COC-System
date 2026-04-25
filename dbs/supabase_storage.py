@@ -1,8 +1,11 @@
 from supabase import create_client
 from storage3.exceptions import StorageApiError
 
-SUPABASE_URL = "https://vjhcppcwtdknkhvbpwly.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZqaGNwcGN3dGRrbmtodmJwd2x5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTI0NTQ2NCwiZXhwIjoyMDg0ODIxNDY0fQ.Mk8iWEcpVgmf9ahRGV9-d1zoVbg4oFntgq_FO4GCV3A"
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("Missing Supabase environment variables")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
