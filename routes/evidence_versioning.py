@@ -1,7 +1,7 @@
 from pymongo import MongoClient
 from datetime import datetime
 import hashlib
-from dbs import mongo_db.py
+from dbs import mongo_db
 
 evidence_versions_collection = db.evidence_versions
 
